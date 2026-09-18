@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1789739994564,
+      "tag": "0000_young_hammerhead",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789756762975,
+      "tag": "0001_aberrant_speed",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789756801511,
+      "tag": "0002_blue_bloodaxe",
+      "breakpoints": true
+    }
+  ]
+}
