@@ -65,7 +65,7 @@ CREATE TABLE `settings` (
 --> statement-breakpoint
 CREATE TRIGGER order_inventory_check BEFORE INSERT ON order_lines
 BEGIN
- SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM products WHERE id=NEW.productId AND active=1 AND stock>=NEW.quantity AND price=NEW.price) THEN RAISE(ABORT,'inventory_changed') END;
+ SELECT (CASE WHEN NOT EXISTS (SELECT 1 FROM products WHERE id=NEW.productId AND active=1 AND stock>=NEW.quantity AND price=NEW.price) THEN RAISE(ABORT,'inventory_changed') END);
 END;
 --> statement-breakpoint
 CREATE TRIGGER order_inventory_reserve AFTER INSERT ON order_lines
