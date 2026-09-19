@@ -11,16 +11,12 @@ import {
   Minus,
   X,
   Menu,
-  Dog,
-  Cat,
-  Rabbit,
   Sparkles,
   Truck,
   ShieldCheck,
   MessageCircle,
   Leaf,
   ChevronDown,
-  Box,
   UserRound,
   SlidersHorizontal,
   Check,
@@ -37,6 +33,8 @@ import {
 } from "../lib/catalog";
 import { Brand, Modal, ProductArt } from "./ui";
 import { Checkout, Orders, Chat } from "./shopping";
+import { WorldHero, MotionLayer } from "./experience";
+import ProductDetail from "./product-detail";
 export default function Storefront() {
   const [products, setProducts] = useState<Product[]>(seedProducts),
     [settings, setSettings] = useState<ShopSettings>(defaultSettings),
@@ -51,13 +49,15 @@ export default function Storefront() {
     [detail, setDetail] = useState<Product | null>(null),
     [cartOpen, setCartOpen] = useState(false),
     [checkout, setCheckout] = useState(false),
+    [directCart, setDirectCart] = useState<CartItem[] | null>(null),
+    [chatDraft, setChatDraft] = useState(""),
     [chatOpen, setChatOpen] = useState(false),
     [menu, setMenu] = useState(false),
     [info, setInfo] = useState(""),
     [toast, setToast] = useState(""),
     [ordersOpen, setOrdersOpen] = useState(false),
-    [play, setPlay] = useState(false),
     [unavailable, setUnavailable] = useState(false);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
   useEffect(() => {
     try {
       const c = JSON.parse(localStorage.getItem("pawpal-cart") || "[]"),
@@ -82,6 +82,7 @@ export default function Storefront() {
       .then((d: any) => {
         setProducts(d.products);
         setSettings(d.settings);
+        setCatalogLoaded(true);
       })
       .catch(() => setUnavailable(true));
   }, []);
@@ -103,33 +104,84 @@ export default function Storefront() {
     setPet(p);
     setOnlySaved(false);
     setMenu(false);
-    document
-      .getElementById("shop")
-      ?.scrollIntoView({
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-          ? "auto"
-          : "smooth",
-      });
+    document.getElementById("shop")?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
   };
-  function add(p: Product) {
-    if (p.stock < 1) return;
+  function add(p: Product, quantity = 1) {
+    if (!catalogLoaded || unavailable || p.stock < 1) return false;
     const current = cart.find((i) => i.id === p.id);
-    if (current && current.quantity >= p.stock) {
+    if ((current?.quantity || 0) + quantity > Math.min(p.stock, 99)) {
       setToast("เพิ่มครบตามจำนวนที่มีในสต็อกแล้ว");
-      return;
+      return false;
     }
     setCart((prev) => {
       const i = prev.find((i) => i.id === p.id);
       return i
         ? prev.map((i) =>
             i.id === p.id
-              ? { ...i, quantity: Math.min(i.quantity + 1, p.stock) }
+              ? { ...i, quantity: Math.min(i.quantity + quantity, p.stock) }
               : i,
           )
-        : [...prev, { id: p.id, quantity: 1 }];
+        : [...prev, { id: p.id, quantity }];
     });
     setToast(`เพิ่ม ${p.name} ลงตะกร้าแล้ว`);
+    return true;
   }
+  function openProduct(p: Product) {
+    const url = new URL(location.href);
+    url.searchParams.set("product", p.id);
+    history.pushState(history.state, "", url);
+    setDetail(p);
+  }
+  function closeProduct() {
+    const url = new URL(location.href);
+    url.searchParams.delete("product");
+    url.searchParams.delete("buy");
+    history.replaceState(history.state, "", url);
+    setDetail(null);
+  }
+  function clearBuy() {
+    const url = new URL(location.href);
+    url.searchParams.delete("buy");
+    history.replaceState(history.state, "", url);
+    setCheckout(false);
+    setDirectCart(null);
+  }
+  useEffect(() => {
+    if (!catalogLoaded) return;
+    function fromLink(pop = false) {
+      const params = new URLSearchParams(location.search),
+        id = params.get("product");
+      const product = products.find((p) => p.id === id && p.active);
+      setDetail(product || null);
+      const quantity = Number(params.get("buy"));
+      if (
+        product &&
+        Number.isInteger(quantity) &&
+        quantity > 0 &&
+        quantity <= Math.min(product.stock, 99)
+      ) {
+        setDirectCart([{ id: product.id, quantity }]);
+        setCheckout(true);
+      } else if (pop || params.has("buy")) {
+        setCheckout(false);
+        setDirectCart(null);
+        if (params.has("buy")) {
+          setToast("จำนวนสินค้าหรือสต็อกเปลี่ยนไป กรุณาเลือกสินค้าใหม่");
+          const url = new URL(location.href);
+          url.searchParams.delete("buy");
+          history.replaceState(history.state, "", url);
+        }
+      }
+    }
+    const pop = () => fromLink(true);
+    fromLink();
+    window.addEventListener("popstate", pop);
+    return () => window.removeEventListener("popstate", pop);
+  }, [products, catalogLoaded]);
   const count = cart.reduce((a, b) => a + b.quantity, 0),
     subtotal = cart.reduce(
       (s, i) =>
@@ -286,6 +338,14 @@ export default function Storefront() {
             <button onClick={() => showProducts()}>ช้อปสินค้าทั้งหมด</button>
             <button
               onClick={() => {
+                showProducts();
+                setOnlySaved(true);
+              }}
+            >
+              รายการโปรด
+            </button>
+            <button
+              onClick={() => {
                 setOrdersOpen(true);
                 setMenu(false);
               }}
@@ -304,163 +364,92 @@ export default function Storefront() {
           </nav>
         )}
       </header>
+      <MotionLayer />
       <main>
-        <section className="hero-shell">
-          <div
-            className="hero"
-            onPointerMove={(e) => {
-              if (
-                e.pointerType !== "mouse" ||
-                window.matchMedia("(prefers-reduced-motion: reduce)").matches
-              )
-                return;
-              const r = e.currentTarget.getBoundingClientRect();
-              e.currentTarget.style.setProperty(
-                "--mx",
-                `${(e.clientX - r.left - r.width / 2) * 0.012}px`,
-              );
-              e.currentTarget.style.setProperty(
-                "--my",
-                `${(e.clientY - r.top - r.height / 2) * 0.012}px`,
-              );
-            }}
-            onPointerLeave={(e) => {
-              e.currentTarget.style.setProperty("--mx", "0px");
-              e.currentTarget.style.setProperty("--my", "0px");
-            }}
-          >
-            <div className="hero-image">
-              <img
-                src="/images/hero.webp"
-                alt="หมาคอร์กี้ แมว และกระต่าย 3D บนโลกสีฟ้าของ PAWPAL"
-                fetchPriority="high"
-              />
-            </div>
-            <div className="hero-copy">
-              <div className="eyebrow">
-                <span className="tiny-paw">
-                  <PawPrint size={14} />
-                </span>{" "}
-                A LITTLE WORLD OF HAPPINESS
-              </div>
-              <h1>
-                ทุกความสุข
-                <br />
-                ของ
-                <span className="underline-word">
-                  เพื่อนตัวเล็ก
-                  <svg viewBox="0 0 350 15" aria-hidden="true">
-                    <path d="M3 10 Q160 -2 345 9" />
-                  </svg>
-                </span>
-                <br />
-                เริ่มต้นที่นี่<span className="yellow-dot">.</span>
-              </h1>
-              <p>
-                อาหารดี ๆ การดูแลที่ใช่ และความรักเต็มกระเป๋า
-                <br />
-                สำหรับน้องหมา น้องแมว และเพื่อนตัวจิ๋วของคุณ
-              </p>
-              <button className="primary-button" onClick={() => showProducts()}>
-                ไปช้อปให้เพื่อนซี้ <ArrowUpRight size={20} />
-              </button>
-              <div className="hero-note">
-                <Heart size={15} /> เพราะเขาคือครอบครัวของเราเหมือนกัน
-              </div>
-            </div>
-            <div className="floating-tag tag-love">
-              <Heart size={18} fill="#ff8997" color="#ff8997" />
-              <span>Made for little besties</span>
-            </div>
-            <button className="scene-button" onClick={() => setPlay(true)}>
-              <Box size={16} /> เล่นกับเพื่อน 3D <ArrowUpRight size={15} />
-            </button>
-            <div className="hero-bottom">
-              <span>HAPPY PETS, HAPPY PLANET</span>
-              <span className="hero-paw">
-                <PawPrint size={13} />
+        <WorldHero shop={showProducts} />
+        <div className="love-ribbon" aria-hidden="true">
+          <div>
+            {[0, 1, 2, 3].map((i) => (
+              <span key={i}>
+                SMALL FRIENDS <PawPrint /> BIG FEELINGS <Heart /> EVERYDAY
+                GOODNESS <Sparkles />
               </span>
-              <span>YOUR LITTLE HAPPY PLACE</span>
-            </div>
+            ))}
           </div>
-        </section>
-        <section className="perks wrap" aria-label="บริการของร้าน">
-          <div>
-            <Truck />
-            <span>
-              <b>ส่งความสุขถึงหน้าบ้าน</b>
-              <small>ส่งฟรีเมื่อช้อปครบ {money(settings.freeShipping)}</small>
-            </span>
-          </div>
-          <div>
-            <ShieldCheck />
-            <span>
-              <b>เลือกด้วยความใส่ใจ</b>
-              <small>ข้อมูลสินค้าอ่านง่าย เลือกได้ตรงใจ</small>
-            </span>
-          </div>
-          <div>
-            <MessageCircle />
-            <span>
-              <b>มีเพื่อนคอยช่วยเลือก</b>
-              <small>คุยกับทีม PAWPAL ผ่านแชต</small>
-            </span>
-          </div>
-          <div>
-            <Heart />
-            <span>
-              <b>สำหรับทุกเพื่อนตัวเล็ก</b>
-              <small>หมา แมว และสัตว์เอ็กโซติก</small>
-            </span>
-          </div>
-        </section>
-        <section className="pet-section wrap">
-          <div className="section-heading">
+        </div>
+        <section className="pet-section wrap" data-reveal>
+          <div className="section-heading editorial-heading">
             <div>
-              <span className="kicker">WHO'S YOUR LITTLE BESTIE?</span>
-              <h2>วันนี้ ช้อปให้ใครดี?</h2>
+              <span className="kicker">01 — FIND THEIR HAPPY PLACE</span>
+              <h2>
+                ใครคือเพื่อนซี้
+                <br />
+                <em>ของคุณ?</em>
+              </h2>
             </div>
-            <p>ไม่ว่าจะเพื่อนแบบไหน ก็มีของที่ใช่รออยู่</p>
+            <p>
+              ตัวเล็ก ตัวใหญ่ หรือขนฟูแค่ไหน
+              <br />
+              ก็มีโลกของเขาอยู่ตรงนี้
+            </p>
           </div>
           <div className="pet-grid">
-            {pets.slice(1).map((p, i) => {
-              const Icon = [Dog, Cat, Rabbit][i];
-              return (
-                <button
-                  key={p.id}
-                  className={`pet-card pet-${p.id} ${pet === p.id ? "selected" : ""}`}
-                  onClick={() => showProducts(p.id)}
-                >
-                  <span className="pet-icon">
-                    <Icon size={48} strokeWidth={1.3} />
-                  </span>
+            {pets.slice(1).map((p, i) => (
+              <button
+                key={p.id}
+                className={
+                  "pet-card pet-" + p.id + (pet === p.id ? " selected" : "")
+                }
+                onClick={() => showProducts(p.id)}
+                aria-pressed={pet === p.id}
+              >
+                <span className="pet-card-top">
+                  <span>0{i + 1}</span>
                   <span>
-                    <small>{p.en}</small>
+                    {
+                      [
+                        "THE GOOD BOYS",
+                        "THE LITTLE BOSSES",
+                        "THE TINY WONDERS",
+                      ][i]
+                    }
+                  </span>
+                  <ArrowUpRight size={24} />
+                </span>
+                <span className="pet-portrait">
+                  <img
+                    src={"/images/pet-" + p.id + ".webp"}
+                    alt={p.name}
+                    loading="lazy"
+                  />
+                </span>
+                <span className="pet-card-bottom">
+                  <span>
                     <strong>{p.name}</strong>
                     <em>
                       {
                         [
-                          "อาหารและของโปรดของเจ้าตูบ",
+                          "ความสุขของเจ้าตูบ",
                           "เอาใจเจ้านายตัวน้อย",
-                          "กระต่าย หนู และเพื่อนตัวจิ๋ว",
+                          "เพื่อนพิเศษ ของพิเศษ",
                         ][i]
                       }
                     </em>
                   </span>
                   <span className="round-arrow">
-                    <ArrowUpRight size={21} />
+                    <ArrowUpRight size={24} />
                   </span>
-                </button>
-              );
-            })}
+                </span>
+              </button>
+            ))}
           </div>
         </section>
-        <section id="shop" className="shop-section wrap">
+        <section id="shop" className="shop-section wrap" data-reveal>
           <div className="section-heading">
             <div>
-              <span className="kicker">GOOD THINGS FOR YOUR GOOD FRIENDS</span>
+              <span className="kicker">02 — THE GOOD STUFF</span>
               <h2>
-                {onlySaved ? "ของโปรดที่เก็บไว้" : "ของดี ที่เพื่อนซี้จะหลงรัก"}
+                {onlySaved ? "ของโปรดที่เก็บไว้" : "ของโปรดประจำวัน"}
                 <Sparkles className="heading-spark" size={25} />
               </h2>
             </div>
@@ -482,6 +471,7 @@ export default function Storefront() {
                 <button
                   key={c}
                   className={category === c ? "selected" : ""}
+                  aria-pressed={category === c}
                   onClick={() => setCategory(c)}
                 >
                   {c}
@@ -544,7 +534,7 @@ export default function Storefront() {
                 <div className={`product-visual product-bg-${p.art}`}>
                   <button
                     className="product-art-button"
-                    onClick={() => setDetail(p)}
+                    onClick={() => openProduct(p)}
                     aria-label={`ดูรายละเอียด ${p.name}`}
                   >
                     <ProductArt product={p} />
@@ -553,6 +543,7 @@ export default function Storefront() {
                   <button
                     className={`save-button ${saved.includes(p.id) ? "saved" : ""}`}
                     aria-label={`${saved.includes(p.id) ? "เลิกบันทึก" : "บันทึก"} ${p.name}`}
+                    aria-pressed={saved.includes(p.id)}
                     onClick={() =>
                       setSaved((s) =>
                         s.includes(p.id)
@@ -571,7 +562,7 @@ export default function Storefront() {
                   <span className="product-brand">{p.brand}</span>
                   <button
                     className="product-title"
-                    onClick={() => setDetail(p)}
+                    onClick={() => openProduct(p)}
                   >
                     {p.name}
                   </button>
@@ -618,21 +609,73 @@ export default function Storefront() {
             </div>
           )}
         </section>
-        <section className="care-banner wrap">
-          <div className="care-icon">
-            <PawPrint size={62} strokeWidth={1.3} />
+        <section className="care-story wrap" data-reveal>
+          <div className="care-world">
+            <img
+              src="/images/world.webp"
+              alt="เพื่อนสัตว์เลี้ยงในโลกของ PAWPAL"
+              loading="lazy"
+            />
+            <span>
+              GOOD CARE.
+              <br />
+              GREAT LITTLE LIVES.
+            </span>
+          </div>
+          <div className="care-copy">
+            <span className="kicker">03 — HERE FOR YOU & YOUR BESTIE</span>
+            <h2>
+              เพื่อนของคุณ
+              <br />
+              ก็เพื่อนของเรา<span>♡</span>
+            </h2>
+            <p>
+              สงสัยว่าของชิ้นไหนเหมาะกับเพื่อนตัวเล็ก?
+              <br />
+              บอกเราได้เลย มาช่วยกันเลือกสิ่งดี ๆ ให้เขา
+            </p>
+            <button className="world-shop" onClick={() => setChatOpen(true)}>
+              คุยกับ PAWPAL{" "}
+              <span>
+                <MessageCircle size={23} />
+              </span>
+            </button>
+            <button
+              className="care-link"
+              onClick={() => setInfo("รู้จัก PAWPAL")}
+            >
+              รู้จักโลกของเรา <ArrowUpRight size={17} />
+            </button>
+          </div>
+        </section>
+        <section className="service-strip wrap" aria-label="บริการของร้าน">
+          <div>
+            <Truck />
+            <span>
+              <b>ส่งความสุขถึงบ้าน</b>
+              <small>ส่งฟรีเมื่อครบ {money(settings.freeShipping)}</small>
+            </span>
           </div>
           <div>
-            <span className="kicker">A LITTLE HELP, A LOT OF LOVE</span>
-            <h2>เลือกไม่ถูก? เราอยู่ตรงนี้นะ</h2>
-            <p>บอกเราเรื่องเพื่อนตัวเล็ก แล้วมาหาของที่เหมาะไปด้วยกัน</p>
+            <ShieldCheck />
+            <span>
+              <b>ข้อมูลครบ เลือกง่าย</b>
+              <small>ดูรายละเอียดก่อนตัดสินใจ</small>
+            </span>
           </div>
-          <button className="primary-button" onClick={() => setChatOpen(true)}>
-            <MessageCircle size={18} /> คุยกับ PAWPAL <ArrowUpRight size={18} />
-          </button>
+          <div>
+            <MessageCircle />
+            <span>
+              <b>มีเพื่อนคอยช่วย</b>
+              <small>คุยกับทีมร้านผ่านแชต</small>
+            </span>
+          </div>
         </section>
       </main>
       <footer className="footer">
+        <div className="footer-wordmark wrap" aria-hidden="true">
+          pawpal<span>®</span>
+        </div>
         <div className="footer-main wrap">
           <div>
             <Brand />
@@ -690,7 +733,6 @@ export default function Storefront() {
       >
         <MessageCircle size={23} />
         <span>มีอะไรให้ช่วยไหม?</span>
-        <span className="chat-fab-dot" />
       </button>
       {toast && (
         <div className="toast" role="status">
@@ -698,35 +740,40 @@ export default function Storefront() {
           {toast}
         </div>
       )}
-      {detail && (
-        <Modal title="ของดีสำหรับเพื่อนซี้" close={() => setDetail(null)} wide>
-          <div className="detail-grid">
-            <div className={`detail-art product-bg-${detail.art}`}>
-              <ProductArt product={detail} />
-            </div>
-            <div>
-              <span className="kicker">{detail.brand}</span>
-              <h2>{detail.name}</h2>
-              <p>
-                {detail.size} • {pets.find((p) => p.id === detail.pet)?.name}
-              </p>
-              <strong className="detail-price">{money(detail.price)}</strong>
-              <p className="detail-description">{detail.description}</p>
-              <span className="stock">
-                {detail.stock > 0
-                  ? `พร้อมส่ง ${detail.stock} ชิ้น`
-                  : "สินค้ายังไม่พร้อมจำหน่าย"}
-              </span>
-              <button
-                className="primary-button full"
-                disabled={!detail.stock}
-                onClick={() => add(detail)}
-              >
-                <ShoppingBag size={18} /> เพิ่มลงตะกร้า
-              </button>
-            </div>
-          </div>
-        </Modal>
+      {detail && !checkout && (
+        <ProductDetail
+          key={detail.id}
+          product={detail}
+          purchasable={catalogLoaded && !unavailable}
+          products={products}
+          settings={settings}
+          saved={saved.includes(detail.id)}
+          inCart={cart.find((i) => i.id === detail.id)?.quantity || 0}
+          close={closeProduct}
+          favorite={() =>
+            setSaved((s) =>
+              s.includes(detail.id)
+                ? s.filter((id) => id !== detail.id)
+                : [...s, detail.id],
+            )
+          }
+          add={(quantity) => add(detail, quantity)}
+          buy={(quantity) => {
+            setDirectCart([{ id: detail.id, quantity }]);
+            const url = new URL(location.href);
+            url.searchParams.set("buy", String(quantity));
+            history.replaceState(history.state, "", url);
+            setCheckout(true);
+          }}
+          chat={() => {
+            setChatDraft(
+              "สนใจสินค้า " + detail.name + " ขอสอบถามรายละเอียดค่ะ",
+            );
+            closeProduct();
+            setChatOpen(true);
+          }}
+          select={openProduct}
+        />
       )}
       {cartOpen && (
         <Modal
@@ -780,7 +827,7 @@ export default function Storefront() {
                           <span>{item.quantity}</span>
                           <button
                             aria-label={`เพิ่มจำนวน ${p.name}`}
-                            disabled={item.quantity >= p.stock}
+                            disabled={item.quantity >= Math.min(p.stock, 99)}
                             onClick={() => add(p)}
                           >
                             <Plus size={14} />
@@ -861,13 +908,14 @@ export default function Storefront() {
       )}
       {checkout && (
         <Checkout
-          cart={cart}
+          cart={directCart || cart}
           products={products}
           settings={settings}
-          close={() => setCheckout(false)}
+          close={clearBuy}
           done={() => {
-            setCart([]);
-            setCheckout(false);
+            if (!directCart) setCart([]);
+            clearBuy();
+            closeProduct();
             setOrdersOpen(true);
           }}
         />
@@ -875,8 +923,16 @@ export default function Storefront() {
       {ordersOpen && (
         <Orders close={() => setOrdersOpen(false)} settings={settings} />
       )}
-      {chatOpen && <Chat close={() => setChatOpen(false)} />}
-      {play && <PetPlay close={() => setPlay(false)} />}
+      {chatOpen && (
+        <Chat
+          initialMessage={chatDraft}
+          close={() => {
+            setChatOpen(false);
+            setChatDraft("");
+          }}
+        />
+      )}
+
       {info && (
         <Modal title={info} close={() => setInfo("")}>
           <div className="info-content">
@@ -932,30 +988,5 @@ export default function Storefront() {
         </Modal>
       )}
     </>
-  );
-}
-function PetPlay({ close }: { close: () => void }) {
-  const [Scene, setScene] = useState<any>(null),
-    [error, setError] = useState(false);
-  useEffect(() => {
-    import("./pet-scene")
-      .then((m) => setScene(() => m.default))
-      .catch(() => setError(true));
-  }, []);
-  return (
-    <Modal title="มาเล่นกับเพื่อนตัวเล็ก" close={close} wide>
-      {Scene ? (
-        <Scene />
-      ) : (
-        <div className="scene-loading">
-          {error
-            ? "โหลดสนามเล่นไม่สำเร็จ กรุณาลองใหม่"
-            : "กำลังปลุกเพื่อนตัวเล็ก…"}
-        </div>
-      )}
-      <p className="muted center">
-        ลากเพื่อหมุนดูรอบตัว • แตะเพื่อนเพื่อทักทาย
-      </p>
-    </Modal>
   );
 }

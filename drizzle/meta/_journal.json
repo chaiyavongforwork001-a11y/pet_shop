@@ -22,6 +22,27 @@
       "when": 1789756801511,
       "tag": "0002_blue_bloodaxe",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789810471387,
+      "tag": "0003_sad_famine",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789810635841,
+      "tag": "0004_spotty_siren",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1789811349171,
+      "tag": "0005_rare_ben_parker",
+      "breakpoints": true
     }
   ]
 }

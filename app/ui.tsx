@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { PawPrint, X } from "lucide-react";
-import type { Product } from "../lib/catalog";
+import { type Product } from "../lib/catalog";
 export function ProductArt({ product }: { product: Product }) {
-  return product.image ? (
+  const image = product.image || product.images?.[0];
+  return image ? (
     <img
       className="product-photo"
-      src={product.image}
+      src={image}
       alt={product.name}
       loading="lazy"
     />
@@ -34,11 +35,13 @@ export function Modal({
   close,
   children,
   wide = false,
+  className = "",
 }: {
   title: string;
   close: () => void;
   children: React.ReactNode;
   wide?: boolean;
+  className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null),
     callback = useRef(close);
@@ -86,7 +89,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`modal ${wide ? "wide" : ""}`}
+        className={`modal ${wide ? "wide" : ""} ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-heading">

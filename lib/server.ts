@@ -119,6 +119,15 @@ export function orderView(o: any) {
     demo: !!o.demo,
   };
 }
+export function productView(p: any) {
+  let images: string[] = [];
+  try {
+    const parsed = JSON.parse(p.images || "[]");
+    if (Array.isArray(parsed))
+      images = parsed.filter((x: unknown) => typeof x === "string").slice(0, 8);
+  } catch {}
+  return { ...p, images };
+}
 export async function imageFile(req: Request) {
   if (Number(req.headers.get("content-length") || 0) > 6 * 1024 * 1024)
     throw new HttpError(413, "รูปต้องมีขนาดไม่เกิน 5 MB");

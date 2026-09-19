@@ -10,6 +10,7 @@ export type Product = {
   stock: number;
   description: string;
   image: string;
+  images?: string[];
   art: number;
   badge: string;
   active: number;
@@ -138,6 +139,18 @@ export const money = (n: number) =>
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(n);
+export function productImages(product: Product): string[] {
+  const images = [
+    ...new Set([product.image, ...(product.images || [])].filter(Boolean)),
+  ];
+  if (images.length) return images.slice(0, 8);
+  return seedProducts.some((p) => p.id === product.id)
+    ? [
+        `/images/product-front-${product.art}.webp`,
+        `/images/product-side-${product.art}.webp`,
+      ]
+    : [`/images/product-front-${product.art}.webp`];
+}
 export type CartItem = { id: string; quantity: number };
 export type ShopSettings = {
   bankName: string;

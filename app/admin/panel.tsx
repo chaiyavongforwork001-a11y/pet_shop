@@ -15,6 +15,9 @@ import {
   Send,
   Eye,
   AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  ImagePlus,
 } from "lucide-react";
 import { Brand, Modal, ProductArt } from "../ui";
 import {
@@ -25,6 +28,7 @@ import {
   pets,
   categories,
   statusLabels,
+  productImages,
 } from "../../lib/catalog";
 type Dashboard = {
   products: Product[];
@@ -469,8 +473,13 @@ function ProductForm({
   close: () => void;
   save: (p: Product) => Promise<void>;
 }) {
-  const [p, setP] = useState({ ...initial, expectedStock: initial.stock }),
+  const [p, setP] = useState({
+      ...initial,
+      images: initial.id ? productImages(initial) : [],
+      expectedStock: initial.stock,
+    }),
     [error, setError] = useState(""),
+    [imageLink, setImageLink] = useState(""),
     [busy, setBusy] = useState(false);
   const change = (k: keyof Product, v: any) => setP((s) => ({ ...s, [k]: v }));
   async function submit(e: FormEvent) {
@@ -485,19 +494,39 @@ function ProductForm({
       setBusy(false);
     }
   }
-  async function upload(file?: File) {
-    if (!file) return;
+  function updateImages(images: string[]) {
+    setP((s) => ({ ...s, images, image: images[0] || "" }));
+  }
+  function moveImage(index: number, direction: number) {
+    const images = [...p.images];
+    [images[index], images[index + direction]] = [
+      images[index + direction],
+      images[index],
+    ];
+    updateImages(images);
+  }
+  async function upload(files: File[]) {
+    if (!files.length) return;
+    if (p.images.length + files.length > 8) {
+      setError("เพิ่มได้สูงสุด 8 ภาพต่อสินค้า");
+      return;
+    }
     setBusy(true);
+    setError("");
+    const uploaded = [...p.images];
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const r = await fetch("/api/admin/upload", {
-        method: "POST",
-        body: form,
-      });
-      const d: any = await r.json();
-      if (!r.ok) throw Error(d.error);
-      change("image", d.url);
+      for (const file of files) {
+        const form = new FormData();
+        form.append("file", file);
+        const r = await fetch("/api/admin/upload", {
+          method: "POST",
+          body: form,
+        });
+        const d: any = await r.json();
+        if (!r.ok) throw Error(d.error);
+        uploaded.push(d.url);
+        updateImages([...uploaded]);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -508,29 +537,91 @@ function ProductForm({
     <Modal title={p.id ? "แก้ไขสินค้า" : "เพิ่มสินค้าใหม่"} close={close} wide>
       <form onSubmit={submit} className="form-stack">
         <div className="product-edit-grid">
-          <div>
-            <div className="edit-product-art">
-              <ProductArt product={p} />
+          <fieldset className="gallery-editor" disabled={busy}>
+            <legend>
+              อัลบั้มของเพื่อนซี้ <span>{p.images.length}/8 ภาพ</span>
+            </legend>
+            <p>รูปแรกเป็นภาพปก ใช้ปุ่มลูกศรเพื่อจัดลำดับ</p>
+            <div className="admin-gallery-grid">
+              {p.images.map((src, i) => (
+                <div className="admin-gallery-item" key={src}>
+                  <img src={src} alt={"ภาพสินค้า " + (i + 1)} />
+                  <span>{i === 0 ? "ภาพปก" : i + 1}</span>
+                  <div>
+                    <button
+                      type="button"
+                      disabled={i === 0}
+                      aria-label={"เลื่อนภาพ " + (i + 1) + " ไปก่อนหน้า"}
+                      onClick={() => moveImage(i, -1)}
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={i === p.images.length - 1}
+                      aria-label={"เลื่อนภาพ " + (i + 1) + " ไปถัดไป"}
+                      onClick={() => moveImage(i, 1)}
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={"ลบภาพ " + (i + 1)}
+                      onClick={() =>
+                        updateImages(p.images.filter((_, n) => n !== i))
+                      }
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
             <label className="upload-label">
-              อัปโหลดภาพสินค้า
+              <span>
+                <ImagePlus size={18} /> เพิ่มรูปให้เพื่อน ๆ ดู
+              </span>
               <input
                 type="file"
+                multiple
                 accept="image/jpeg,image/png,image/webp"
                 disabled={busy}
-                onChange={(e) => upload(e.target.files?.[0])}
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  e.target.value = "";
+                  upload(files);
+                }}
               />
-              <small>JPG, PNG, WebP ไม่เกิน 5 MB</small>
+              <small>เลือกได้หลายรูป • JPG, PNG, WebP ไม่เกิน 5 MB/รูป</small>
             </label>
             <label>
-              หรือลิงก์ภาพ HTTPS
+              หรือเพิ่มด้วยลิงก์ภาพ HTTPS
               <input
-                value={p.image}
-                onChange={(e) => change("image", e.target.value)}
+                value={imageLink}
+                onChange={(e) => setImageLink(e.target.value)}
                 placeholder="https://…"
               />
             </label>
-          </div>
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={!imageLink.trim() || p.images.length >= 8}
+              onClick={() => {
+                try {
+                  const url = new URL(imageLink.trim());
+                  if (url.protocol !== "https:") throw Error();
+                  if (!p.images.includes(url.href))
+                    updateImages([...p.images, url.href]);
+                  setImageLink("");
+                  setError("");
+                } catch {
+                  setError("กรุณาใส่ลิงก์ HTTPS ที่ถูกต้อง");
+                }
+              }}
+            >
+              <Plus size={16} /> เพิ่มภาพจากลิงก์
+            </button>
+          </fieldset>
           <div className="form-stack">
             <label>
               ชื่อสินค้า

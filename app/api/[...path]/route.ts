@@ -11,35 +11,64 @@ import {
   ensureSeed,
   shopSettings,
   orderView,
+  productView,
   imageFile,
   HttpError,
 } from "../../../lib/server";
 import { categories } from "../../../lib/catalog";
 export const dynamic = "force-dynamic";
-const productSchema = z.object({
-  expectedStock: z.number().int().min(0).optional(),
-  id: z.string().max(80).optional(),
-  name: z.string().trim().min(2).max(150),
-  brand: z.string().trim().min(1).max(80),
-  pet: z.enum(["dog", "cat", "exotic"]),
-  category: z.enum(["อาหาร", "อาหารเสริม", "ยาและการป้องกัน", "ของใช้"]),
-  price: z.number().finite().min(0).max(100000),
-  originalPrice: z.number().finite().min(0).max(100000),
-  size: z.string().trim().min(1).max(80),
-  stock: z.number().int().min(0).max(100000),
-  description: z.string().trim().min(5).max(5000),
-  image: z
-    .string()
-    .max(2000)
-    .refine(
-      (s) =>
-        !s || s.startsWith("/api/media/products/") || s.startsWith("https://"),
-      "ลิงก์รูปต้องเป็น HTTPS",
-    ),
-  art: z.number().int().min(0).max(3),
-  badge: z.string().max(60),
-  active: z.union([z.literal(0), z.literal(1)]),
-});
+function validProductImage(s: string) {
+  if (
+    /^\/api\/media\/products\/[a-zA-Z0-9-]+$/.test(s) ||
+    /^\/images\/product-(front|side)-[0-3]\.webp$/.test(s)
+  )
+    return true;
+  try {
+    const url = new URL(s);
+    return url.protocol === "https:" && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+const productSchema = z
+  .object({
+    expectedStock: z.number().int().min(0).optional(),
+    id: z.string().max(80).optional(),
+    name: z.string().trim().min(2).max(150),
+    brand: z.string().trim().min(1).max(80),
+    pet: z.enum(["dog", "cat", "exotic"]),
+    category: z.enum(["อาหาร", "อาหารเสริม", "ยาและการป้องกัน", "ของใช้"]),
+    price: z.number().finite().min(0).max(100000),
+    originalPrice: z.number().finite().min(0).max(100000),
+    size: z.string().trim().min(1).max(80),
+    stock: z.number().int().min(0).max(100000),
+    description: z.string().trim().min(5).max(5000),
+    image: z
+      .string()
+      .max(2000)
+      .refine((s) => !s || validProductImage(s), "ลิงก์รูปต้องเป็น HTTPS"),
+    images: z
+      .array(
+        z
+          .string()
+          .min(1)
+          .max(2000)
+          .refine(validProductImage, "รูปต้องเป็นลิงก์ HTTPS หรือรูปจากร้าน"),
+      )
+      .max(8)
+      .default([]),
+    art: z.number().int().min(0).max(3),
+    badge: z.string().max(60),
+    active: z.union([z.literal(0), z.literal(1)]),
+  })
+  .superRefine((p, ctx) => {
+    if (new Set([p.image, ...p.images].filter(Boolean)).size > 8)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["images"],
+        message: "รวมภาพปกแล้วเพิ่มได้สูงสุด 8 ภาพ",
+      });
+  });
 const orderSchema = z.object({
   quotedTotal: z.number().finite().nonnegative(),
   requestId: z.string().uuid(),
@@ -104,7 +133,105 @@ async function handle(req: Request) {
       const p = await db
         .prepare("SELECT * FROM products WHERE active=1 ORDER BY rowid")
         .all();
-      return json({ products: p.results, settings: await shopSettings() });
+      return json({
+        products: p.results.map(productView),
+        settings: await shopSettings(),
+      });
+    }
+    if (
+      path[0] === "products" &&
+      path[1] &&
+      path[2] === "reviews" &&
+      path.length === 3
+    ) {
+      const product = await db
+        .prepare("SELECT id FROM products WHERE id=? AND active=1")
+        .bind(path[1])
+        .first();
+      if (!product) throw new HttpError(404, "ไม่พบสินค้า");
+      let user: Awaited<ReturnType<typeof identity>> | null = null;
+      try {
+        user = await identity();
+      } catch (e) {
+        if (!(e instanceof HttpError) || e.status !== 401) throw e;
+      }
+      const settings = await shopSettings();
+      const mode = settings.demo ? 1 : 0;
+      const purchase = user
+        ? await db
+            .prepare(
+              "SELECT o.id,o.demo FROM orders o JOIN order_lines l ON l.orderId=o.id WHERE o.userId=? AND l.productId=? AND o.status='shipped' AND o.demo=? ORDER BY o.createdAt DESC LIMIT 1",
+            )
+            .bind(user.userId, path[1], mode)
+            .first<{ id: string; demo: number }>()
+        : null;
+      if (method === "GET") {
+        const [list, summary, mine] = await Promise.all([
+          db
+            .prepare(
+              "SELECT id,nickname,rating,comment,createdAt,updatedAt,demo FROM reviews WHERE productId=? AND demo=? ORDER BY updatedAt DESC LIMIT 50",
+            )
+            .bind(path[1], mode)
+            .all(),
+          db
+            .prepare(
+              "SELECT COUNT(*) AS count,AVG(rating) AS average FROM reviews WHERE productId=? AND demo=?",
+            )
+            .bind(path[1], mode)
+            .first(),
+          user
+            ? db
+                .prepare(
+                  "SELECT nickname,rating,comment FROM reviews WHERE productId=? AND userId=? AND demo=?",
+                )
+                .bind(path[1], user.userId, mode)
+                .first()
+            : Promise.resolve(null),
+        ]);
+        return json({
+          reviews: list.results,
+          summary,
+          mine,
+          canReview: !!purchase,
+          signedIn: !!user,
+          demo: settings.demo,
+        });
+      }
+      if (method === "POST") {
+        if (!user) throw new HttpError(401, "กรุณาลงชื่อเข้าใช้ก่อนรีวิว");
+        if (!purchase)
+          throw new HttpError(
+            403,
+            "รีวิวได้หลังจากคำสั่งซื้อของสินค้านี้ถูกจัดส่งแล้ว",
+          );
+        const review = z
+          .object({
+            nickname: z.string().trim().min(2).max(40),
+            rating: z.number().int().min(1).max(5),
+            comment: z.string().trim().min(10).max(1500),
+          })
+          .parse(await body(req));
+        const now = new Date().toISOString();
+        await db
+          .prepare(
+            "INSERT INTO reviews (id,productId,userId,orderId,nickname,rating,comment,demo,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(productId,userId,demo) DO UPDATE SET orderId=excluded.orderId,nickname=excluded.nickname,rating=excluded.rating,comment=excluded.comment,updatedAt=excluded.updatedAt",
+          )
+          .bind(
+            crypto.randomUUID(),
+            path[1],
+            user.userId,
+            purchase.id,
+            review.nickname,
+            review.rating,
+            review.comment,
+            purchase.demo,
+            now,
+            now,
+          )
+          .run();
+        return json({ ok: true });
+      }
+      throw new HttpError(405, "วิธีนี้ไม่รองรับ");
     }
     if (path[0] === "orders") {
       const u = await identity();
@@ -318,7 +445,7 @@ async function handle(req: Request) {
             .all(),
         ]);
         return json({
-          products: p.results,
+          products: p.results.map(productView),
           orders: o.results.map(orderView),
           settings: s,
           threads: threads.results,
@@ -327,6 +454,7 @@ async function handle(req: Request) {
       if (path[1] === "products" && method === "POST") {
         const p = productSchema.parse(await body(req));
         const id = p.id || crypto.randomUUID();
+        const images = [...new Set([p.image, ...p.images].filter(Boolean))];
         const values = [
           p.name,
           p.brand,
@@ -337,17 +465,18 @@ async function handle(req: Request) {
           p.size,
           p.stock,
           p.description,
-          p.image,
+          images[0] || "",
           p.art,
           p.badge,
           p.active,
+          JSON.stringify(images),
         ];
         if (p.id) {
           if (p.expectedStock === undefined)
             throw new HttpError(400, "กรุณาโหลดสินค้าใหม่ก่อนแก้ไข");
           const r = await db
             .prepare(
-              "UPDATE products SET name=?,brand=?,pet=?,category=?,price=?,originalPrice=?,size=?,stock=?,description=?,image=?,art=?,badge=?,active=? WHERE id=? AND stock=?",
+              "UPDATE products SET name=?,brand=?,pet=?,category=?,price=?,originalPrice=?,size=?,stock=?,description=?,image=?,art=?,badge=?,active=?,images=? WHERE id=? AND stock=?",
             )
             .bind(...values, id, p.expectedStock)
             .run();
@@ -359,7 +488,7 @@ async function handle(req: Request) {
         } else {
           await db
             .prepare(
-              "INSERT INTO products (name,brand,pet,category,price,originalPrice,size,stock,description,image,art,badge,active,id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+              "INSERT INTO products (name,brand,pet,category,price,originalPrice,size,stock,description,image,art,badge,active,images,id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             )
             .bind(...values, id)
             .run();

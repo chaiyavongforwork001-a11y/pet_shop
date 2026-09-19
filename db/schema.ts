@@ -22,6 +22,7 @@ export const products = sqliteTable(
     stock: integer("stock").notNull().default(0),
     description: text("description").notNull(),
     image: text("image").notNull().default(""),
+    images: text("images").notNull().default("[]"),
     art: integer("art").notNull().default(0),
     badge: text("badge").notNull().default(""),
     active: integer("active").notNull().default(1),
@@ -89,4 +90,28 @@ export const messages = sqliteTable(
     createdAt: text("createdAt").notNull(),
   },
   (t) => [index("messages_user_created").on(t.userId, t.createdAt)],
+);
+export const reviews = sqliteTable(
+  "reviews",
+  {
+    id: text("id").primaryKey(),
+    productId: text("productId")
+      .notNull()
+      .references(() => products.id),
+    userId: text("userId").notNull(),
+    orderId: text("orderId")
+      .notNull()
+      .references(() => orders.id),
+    nickname: text("nickname").notNull(),
+    rating: integer("rating").notNull(),
+    comment: text("comment").notNull(),
+    demo: integer("demo").notNull(),
+    createdAt: text("createdAt").notNull(),
+    updatedAt: text("updatedAt").notNull(),
+  },
+  (t) => [
+    uniqueIndex("reviews_product_user_mode").on(t.productId, t.userId, t.demo),
+    index("reviews_product_demo_created").on(t.productId, t.demo, t.createdAt),
+    check("reviews_rating_valid", sql`${t.rating} >= 1 AND ${t.rating} <= 5`),
+  ],
 );

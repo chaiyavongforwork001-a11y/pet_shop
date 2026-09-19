@@ -91,7 +91,14 @@ export function Checkout({
               </p>
               <a
                 className="primary-button"
-                href="/signin-with-chatgpt?return_to=/"
+                href={
+                  "/signin-with-chatgpt?return_to=" +
+                  encodeURIComponent(
+                    typeof window !== "undefined"
+                      ? location.pathname + location.search
+                      : "/",
+                  )
+                }
                 target="_top"
               >
                 ลงชื่อเข้าใช้ด้วย ChatGPT
@@ -360,9 +367,15 @@ export function Orders({
     </Modal>
   );
 }
-export function Chat({ close }: { close: () => void }) {
+export function Chat({
+  close,
+  initialMessage = "",
+}: {
+  close: () => void;
+  initialMessage?: string;
+}) {
   const [messages, setMessages] = useState<any[]>([]),
-    [text, setText] = useState(""),
+    [text, setText] = useState(initialMessage),
     [error, setError] = useState(""),
     [sending, setSending] = useState(false);
   const end = useRef<HTMLDivElement>(null);
