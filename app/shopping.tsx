@@ -1,6 +1,15 @@
 "use client";
 import { useState, useEffect, useRef, type FormEvent } from "react";
-import { Package, PawPrint, Send, X, ArrowRight } from "lucide-react";
+import {
+  Package,
+  PawPrint,
+  Send,
+  X,
+  ArrowRight,
+  ChevronDown,
+  MessageCircle,
+  Heart,
+} from "lucide-react";
 import {
   CartItem,
   Product,
@@ -368,50 +377,134 @@ export function Orders({
   );
 }
 export function Chat({
-  close,
+  open,
+  setOpen,
   initialMessage = "",
+  consumeInitialMessage,
 }: {
-  close: () => void;
+  open: boolean;
+  setOpen: (value: boolean) => void;
   initialMessage?: string;
+  consumeInitialMessage: () => void;
 }) {
   const [messages, setMessages] = useState<any[]>([]),
-    [text, setText] = useState(initialMessage),
+    [text, setText] = useState(""),
     [error, setError] = useState(""),
-    [sending, setSending] = useState(false);
-  const end = useRef<HTMLDivElement>(null);
-  async function load() {
+    [sending, setSending] = useState(false),
+    [signedOut, setSignedOut] = useState(false),
+    [loaded, setLoaded] = useState(false);
+  const launcher = useRef<HTMLButtonElement>(null),
+    closeButton = useRef<HTMLButtonElement>(null),
+    messageList = useRef<HTMLDivElement>(null),
+    nearBottom = useRef(true),
+    currentRequest = useRef<AbortController | null>(null),
+    isOpen = useRef(open);
+  isOpen.current = open;
+  function close() {
+    setOpen(false);
+    launcher.current?.focus({ preventScroll: true });
+  }
+  async function load(force = false) {
+    if (!isOpen.current) return;
+    if (currentRequest.current && !currentRequest.current.signal.aborted) {
+      if (!force) return;
+      currentRequest.current.abort();
+    }
+    const controller = new AbortController();
+    currentRequest.current = controller;
     try {
-      const r = await fetch("/api/chat");
+      const r = await fetch("/api/chat", { signal: controller.signal });
       const d: any = await r.json();
+      if (controller.signal.aborted) return;
+      setSignedOut(r.status === 401);
+      if (r.status === 401) {
+        setError("");
+        return;
+      }
       if (!r.ok) throw Error(d.error);
-      setMessages(d.messages);
+      setMessages((previous) =>
+        JSON.stringify(previous) === JSON.stringify(d.messages)
+          ? previous
+          : d.messages,
+      );
       setError("");
     } catch (e) {
+      if (controller.signal.aborted) return;
       setError((e as Error).message);
+    } finally {
+      if (!controller.signal.aborted) setLoaded(true);
+      if (currentRequest.current === controller) currentRequest.current = null;
     }
   }
   useEffect(() => {
+    if (!open) return;
     load();
-    const t = setInterval(load, 4000);
-    return () => clearInterval(t);
-  }, []);
+    const t = setInterval(() => load(), 4000);
+    const focusFrame = requestAnimationFrame(() => {
+      if (!document.querySelector('[aria-modal="true"]'))
+        closeButton.current?.focus({ preventScroll: true });
+    });
+    return () => {
+      clearInterval(t);
+      cancelAnimationFrame(focusFrame);
+      currentRequest.current?.abort();
+    };
+  }, [open]);
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "nearest" });
-  }, [messages.length]);
+    try {
+      const saved = JSON.parse(
+        sessionStorage.getItem("pawpal-chat-resume") || "null",
+      );
+      sessionStorage.removeItem("pawpal-chat-resume");
+      if (
+        saved &&
+        typeof saved.text === "string" &&
+        Date.now() - saved.at < 900000
+      ) {
+        setText(saved.text.slice(0, 2000));
+        setOpen(true);
+      }
+    } catch {}
+  }, [setOpen]);
+  function rememberDraft() {
+    try {
+      sessionStorage.setItem(
+        "pawpal-chat-resume",
+        JSON.stringify({ text, at: Date.now() }),
+      );
+    } catch {}
+  }
+  useEffect(() => {
+    if (!initialMessage) return;
+    setText((draft) =>
+      !draft.trim()
+        ? initialMessage
+        : draft.includes(initialMessage)
+          ? draft
+          : `${draft}\n${initialMessage}`.slice(0, 2000),
+    );
+    consumeInitialMessage();
+  }, [initialMessage, consumeInitialMessage]);
+  useEffect(() => {
+    const list = messageList.current;
+    if (open && list && nearBottom.current) list.scrollTop = list.scrollHeight;
+  }, [messages, open]);
   async function send(e: FormEvent) {
     e.preventDefault();
-    if (!text.trim()) return;
+    if (!text.trim() || sending || signedOut) return;
+    const submitted = text;
     setSending(true);
     try {
       const r = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text: submitted }),
       });
       const d: any = await r.json();
       if (!r.ok) throw Error(d.error);
-      setText("");
-      await load();
+      setText((draft) => (draft === submitted ? "" : draft));
+      nearBottom.current = true;
+      await load(true);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -419,68 +512,182 @@ export function Chat({
     }
   }
   return (
-    <div className="chat-window" role="dialog" aria-label="แชตกับ PAWPAL">
-      <div className="chat-heading">
-        <span className="chat-avatar">
-          <PawPrint />
-        </span>
-        <div>
-          <b>เพื่อนช่วยช้อป PAWPAL</b>
-          <small>ฝากข้อความไว้ ทีมงานจะตอบกลับที่นี่</small>
-        </div>
-        <button className="icon-button" onClick={close} aria-label="ปิดแชต">
-          <X size={20} />
-        </button>
-      </div>
-      <div className="chat-messages">
-        <div className="chat-welcome">
-          <PawPrint size={30} />
-          <h3>ฮัลโหล เพื่อนใหม่!</h3>
-          <p>
-            มีอะไรให้ช่วยเลือกให้น้อง ๆ ไหม?
-            <br />
-            ส่งข้อความถึงทีมร้านได้เลย
-          </p>
-        </div>
-        {messages.map((m) => (
+    <aside
+      className={`chat-dock ${open ? "is-open" : ""}`}
+      aria-label="ติดต่อทีม PAWPAL"
+      onKeyDown={(e) => {
+        if (
+          open &&
+          e.key === "Escape" &&
+          !document.querySelector('[aria-modal="true"]')
+        ) {
+          e.stopPropagation();
+          close();
+        }
+      }}
+    >
+      <div className="chat-reveal" aria-hidden={!open} inert={!open}>
+        <div className="chat-clip">
           <div
-            key={m.id}
-            className={`bubble ${m.sender === "customer" ? "mine" : ""}`}
+            id="pawpal-chat"
+            className="chat-window"
+            role="dialog"
+            aria-modal="false"
+            aria-label="แชตกับ PAWPAL"
           >
-            <small>{m.sender === "admin" ? "ทีม PAWPAL" : "คุณ"}</small>
-            <p>{m.text}</p>
-            <time>
-              {new Date(m.createdAt).toLocaleTimeString("th-TH", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </time>
+            <div className="chat-heading">
+              <span className="chat-avatar">
+                <img src="/images/pet-dog.webp" alt="" />
+                <span>
+                  <PawPrint size={11} />
+                </span>
+              </span>
+              <div>
+                <b>เพื่อนช่วยช้อป PAWPAL</b>
+                <small>ฝากข้อความไว้ให้ทีมร้านได้เลย</small>
+              </div>
+              <button
+                ref={closeButton}
+                className="icon-button"
+                onClick={close}
+                aria-label="ย่อแชต"
+              >
+                <ChevronDown size={20} />
+              </button>
+            </div>
+            <div
+              className="chat-messages"
+              ref={messageList}
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                nearBottom.current =
+                  el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+              }}
+            >
+              {!messages.length && (
+                <div className="chat-welcome">
+                  <div className="chat-welcome-friends" aria-hidden="true">
+                    <img src="/images/pet-cat.webp" alt="" />
+                    <img src="/images/pet-dog.webp" alt="" />
+                    <img src="/images/pet-exotic.webp" alt="" />
+                    <Heart size={20} fill="currentColor" />
+                  </div>
+                  <h3>ฮัลโหล เพื่อนซี้!</h3>
+                  <p>
+                    เรื่องของน้อง ๆ ให้เราช่วยนะ
+                    <br />
+                    ส่งข้อความถึงทีมร้านได้เลย
+                  </p>
+                  <span className="chat-welcome-paws" aria-hidden="true">
+                    <PawPrint size={15} />
+                    <PawPrint size={15} />
+                    <PawPrint size={15} />
+                  </span>
+                </div>
+              )}
+              {!loaded && (
+                <p className="chat-loading" role="status">
+                  กำลังเปิดห้องแชต…
+                </p>
+              )}
+              <div
+                className="chat-log"
+                role="log"
+                aria-label="ข้อความสนทนา"
+                aria-live="polite"
+                aria-relevant="additions text"
+              >
+                {messages.map((m) => (
+                  <div
+                    key={m.id}
+                    className={`bubble ${m.sender === "customer" ? "mine" : ""}`}
+                  >
+                    <small>{m.sender === "admin" ? "ทีม PAWPAL" : "คุณ"}</small>
+                    <p>{m.text}</p>
+                    <time>
+                      {new Date(m.createdAt).toLocaleTimeString("th-TH", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </time>
+                  </div>
+                ))}
+              </div>
+              {signedOut && (
+                <div className="chat-signin">
+                  <PawPrint size={20} />
+                  <p>
+                    ลงชื่อเข้าใช้เพื่อคุยกับทีมร้าน
+                    <br />
+                    <small>เก็บบทสนทนาไว้ กลับมาคุยต่อได้</small>
+                  </p>
+                  <a
+                    href="/signin-with-chatgpt?return_to=/"
+                    target="_top"
+                    onClick={rememberDraft}
+                  >
+                    ลงชื่อเข้าใช้ <ArrowRight size={16} />
+                  </a>
+                </div>
+              )}
+              {error && (
+                <div className="error" role="status">
+                  {error}
+                  {error.includes("ลงชื่อ") && (
+                    <a
+                      href="/signin-with-chatgpt?return_to=/"
+                      target="_top"
+                      onClick={rememberDraft}
+                    >
+                      ลงชื่อเข้าใช้เพื่อเริ่มแชต
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+            <form className="chat-input" onSubmit={send}>
+              <textarea
+                aria-label="ข้อความถึงร้าน"
+                placeholder="ฝากข้อความถึงเพื่อนช่วยช้อป…"
+                rows={1}
+                value={text}
+                maxLength={2000}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (
+                    e.key === "Enter" &&
+                    !e.shiftKey &&
+                    !e.nativeEvent.isComposing
+                  ) {
+                    e.preventDefault();
+                    e.currentTarget.form?.requestSubmit();
+                  }
+                }}
+              />
+              <button
+                aria-label={sending ? "กำลังส่งข้อความ" : "ส่งข้อความ"}
+                disabled={sending || !text.trim() || signedOut}
+              >
+                <Send size={19} />
+              </button>
+            </form>
           </div>
-        ))}
-        {error && (
-          <div className="error">
-            {error}
-            {error.includes("ลงชื่อ") && (
-              <a href="/signin-with-chatgpt?return_to=/" target="_top">
-                ลงชื่อเข้าใช้เพื่อเริ่มแชต
-              </a>
-            )}
-          </div>
-        )}
-        <div ref={end} />
+        </div>
       </div>
-      <form className="chat-input" onSubmit={send}>
-        <input
-          aria-label="ข้อความถึงร้าน"
-          placeholder="พิมพ์ข้อความของคุณ…"
-          value={text}
-          maxLength={2000}
-          onChange={(e) => setText(e.target.value)}
-        />
-        <button aria-label="ส่งข้อความ" disabled={sending || !text.trim()}>
-          <Send size={19} />
-        </button>
-      </form>
-    </div>
+      <button
+        ref={launcher}
+        className="chat-launcher"
+        onClick={() => (open ? close() : setOpen(true))}
+        aria-label={open ? "ย่อแชตกับ PAWPAL" : "แชตกับ PAWPAL"}
+        aria-expanded={open}
+        aria-controls="pawpal-chat"
+      >
+        <span className="chat-launcher-icon">
+          {open ? <ChevronDown size={22} /> : <PawPrint size={23} />}
+        </span>
+        <span>{open ? "ไว้คุยกันต่อ ย่อแชตได้เลย" : "มีอะไรให้ช่วยไหม?"}</span>
+        {!open && <MessageCircle className="chat-launcher-bubble" size={18} />}
+      </button>
+    </aside>
   );
 }

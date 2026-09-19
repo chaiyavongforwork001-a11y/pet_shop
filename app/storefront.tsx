@@ -15,7 +15,6 @@ import {
   Truck,
   ShieldCheck,
   MessageCircle,
-  Leaf,
   ChevronDown,
   UserRound,
   SlidersHorizontal,
@@ -35,6 +34,8 @@ import { Brand, Modal, ProductArt } from "./ui";
 import { Checkout, Orders, Chat } from "./shopping";
 import { WorldHero, MotionLayer } from "./experience";
 import ProductDetail from "./product-detail";
+import { PetFooter } from "./footer";
+import { PetMotion } from "./pet-motion";
 export default function Storefront() {
   const [products, setProducts] = useState<Product[]>(seedProducts),
     [settings, setSettings] = useState<ShopSettings>(defaultSettings),
@@ -128,6 +129,7 @@ export default function Storefront() {
         : [...prev, { id: p.id, quantity }];
     });
     setToast(`เพิ่ม ${p.name} ลงตะกร้าแล้ว`);
+    window.dispatchEvent(new Event("pawpal:cart-added"));
     return true;
   }
   function openProduct(p: Product) {
@@ -267,8 +269,9 @@ export default function Storefront() {
       <header className="header">
         <div className="header-inner">
           <Brand />
-          <nav className="desktop-nav">
+          <nav className="desktop-nav" aria-label="เมนูหลัก">
             <a className="active" href="/">
+              <PawPrint size={15} aria-hidden="true" />
               หน้าแรก
             </a>
             <button onClick={() => showProducts()}>
@@ -326,22 +329,35 @@ export default function Storefront() {
             <button
               className="icon-button mobile-menu"
               onClick={() => setMenu(!menu)}
-              aria-label="เปิดเมนู"
+              aria-label={menu ? "ปิดเมนู" : "เปิดเมนู"}
               aria-expanded={menu}
+              aria-controls="mobile-navigation"
             >
-              <Menu />
+              {menu ? <X /> : <Menu />}
             </button>
           </div>
         </div>
-        {menu && (
-          <nav className="mobile-nav">
-            <button onClick={() => showProducts()}>ช้อปสินค้าทั้งหมด</button>
+        <div
+          className={`mobile-menu-reveal ${menu ? "is-open" : ""}`}
+          inert={!menu}
+          aria-hidden={!menu}
+        >
+          <nav
+            className="mobile-nav"
+            id="mobile-navigation"
+            aria-label="เมนูมือถือ"
+          >
+            <button onClick={() => showProducts()}>
+              <PawPrint size={18} />
+              ช้อปสินค้าทั้งหมด
+            </button>
             <button
               onClick={() => {
                 showProducts();
                 setOnlySaved(true);
               }}
             >
+              <Heart size={18} />
               รายการโปรด
             </button>
             <button
@@ -350,6 +366,7 @@ export default function Storefront() {
                 setMenu(false);
               }}
             >
+              <ShoppingBag size={18} />
               คำสั่งซื้อของฉัน
             </button>
             <button
@@ -358,13 +375,15 @@ export default function Storefront() {
                 setMenu(false);
               }}
             >
+              <MessageCircle size={18} />
               คุยกับ PAWPAL
             </button>
             <a href="/admin">จัดการร้านค้า</a>
           </nav>
-        )}
+        </div>
       </header>
       <MotionLayer />
+      <PetMotion />
       <main>
         <WorldHero shop={showProducts} />
         <div className="love-ribbon" aria-hidden="true">
@@ -403,19 +422,6 @@ export default function Storefront() {
                 onClick={() => showProducts(p.id)}
                 aria-pressed={pet === p.id}
               >
-                <span className="pet-card-top">
-                  <span>0{i + 1}</span>
-                  <span>
-                    {
-                      [
-                        "THE GOOD BOYS",
-                        "THE LITTLE BOSSES",
-                        "THE TINY WONDERS",
-                      ][i]
-                    }
-                  </span>
-                  <ArrowUpRight size={24} />
-                </span>
                 <span className="pet-portrait">
                   <img
                     src={"/images/pet-" + p.id + ".webp"}
@@ -583,7 +589,7 @@ export default function Storefront() {
                       onClick={() => add(p)}
                       aria-label={`เพิ่ม ${p.name} ลงตะกร้า`}
                     >
-                      {p.stock ? <Plus size={22} /> : <span>หมด</span>}
+                      {p.stock ? <PawPrint size={22} /> : <span>หมด</span>}
                     </button>
                   </div>
                 </div>
@@ -672,68 +678,12 @@ export default function Storefront() {
           </div>
         </section>
       </main>
-      <footer className="footer">
-        <div className="footer-wordmark wrap" aria-hidden="true">
-          pawpal<span>®</span>
-        </div>
-        <div className="footer-main wrap">
-          <div>
-            <Brand />
-            <p>
-              Small friends. Whole heart.
-              <br />
-              โลกเล็ก ๆ ที่เต็มไปด้วยความรัก
-            </p>
-          </div>
-          <div>
-            <b>ช้อปให้เพื่อนซี้</b>
-            {pets.slice(1).map((p) => (
-              <button key={p.id} onClick={() => showProducts(p.id)}>
-                {p.name}
-              </button>
-            ))}
-          </div>
-          <div>
-            <b>ให้เราช่วยดูแล</b>
-            <button onClick={() => setOrdersOpen(true)}>
-              คำสั่งซื้อของฉัน
-            </button>
-            <button onClick={() => setInfo("การจัดส่ง")}>
-              การจัดส่งและการคืนสินค้า
-            </button>
-            <button onClick={() => setChatOpen(true)}>ติดต่อเรา</button>
-          </div>
-          <div className="footer-note">
-            <Leaf size={24} />
-            <b>สิ่งเล็ก ๆ ที่เราใส่ใจ</b>
-            <p>
-              เลือกให้เหมาะกับชนิดและช่วงวัย
-              <br />
-              เพราะเพื่อนทุกตัวแตกต่างกัน
-            </p>
-            <a href="/admin">
-              สำหรับแอดมิน <ArrowUpRight size={14} />
-            </a>
-          </div>
-        </div>
-        <div className="footer-bottom wrap">
-          <span>
-            © {new Date().getFullYear()} PAWPAL. Made with a whole lot of love.
-          </span>
-          <button onClick={() => setInfo("ความเป็นส่วนตัว")}>
-            นโยบายความเป็นส่วนตัว
-          </button>
-          <span>TH / ฿ THB</span>
-        </div>
-      </footer>
-      <button
-        className="chat-fab"
-        onClick={() => setChatOpen(!chatOpen)}
-        aria-label="แชตกับ PAWPAL"
-      >
-        <MessageCircle size={23} />
-        <span>มีอะไรให้ช่วยไหม?</span>
-      </button>
+      <PetFooter
+        shop={showProducts}
+        orders={() => setOrdersOpen(true)}
+        info={setInfo}
+        chat={() => setChatOpen(true)}
+      />
       {toast && (
         <div className="toast" role="status">
           <Check size={18} />
@@ -923,15 +873,12 @@ export default function Storefront() {
       {ordersOpen && (
         <Orders close={() => setOrdersOpen(false)} settings={settings} />
       )}
-      {chatOpen && (
-        <Chat
-          initialMessage={chatDraft}
-          close={() => {
-            setChatOpen(false);
-            setChatDraft("");
-          }}
-        />
-      )}
+      <Chat
+        open={chatOpen}
+        setOpen={setChatOpen}
+        initialMessage={chatDraft}
+        consumeInitialMessage={() => setChatDraft("")}
+      />
 
       {info && (
         <Modal title={info} close={() => setInfo("")}>

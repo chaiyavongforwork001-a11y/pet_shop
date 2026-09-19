@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./redesign.css";
 import "./product-detail.css";
+import "./community.css";
 
 export const metadata: Metadata = {
   title: "PAWPAL — ทุกความสุขของเพื่อนตัวเล็ก",
