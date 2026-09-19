@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pawpal-dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/run-framework.mjs", "dev"],
+      "port": 5173
+    }
+  ]
+}
