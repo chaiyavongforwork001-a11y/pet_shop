@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { PawPrint } from "lucide-react";
+import { motionAllowed } from "./cute/core-motion";
 
 export function PetMotion() {
   const [burst, setBurst] = useState<{
@@ -12,9 +13,7 @@ export function PetMotion() {
   useEffect(() => {
     const reduced = matchMedia("(prefers-reduced-motion: reduce)");
     const fine = matchMedia("(hover: hover) and (pointer: fine)");
-    const allowed = () =>
-      !reduced.matches &&
-      document.documentElement.dataset.pawpalMotion !== "off";
+    const allowed = motionAllowed;
     let surface: HTMLElement | null = null;
     let frame = 0;
     let x = 0,
@@ -60,28 +59,24 @@ export function PetMotion() {
         "pawpal-scrolled",
         scrollY > 30,
       );
-    const cartAdded = () => {
+    const cartAdded = (event: Event) => {
       if (!allowed()) return;
-      const element = document.activeElement as HTMLElement | null;
-      const rect = element?.closest("button")?.getBoundingClientRect();
-      if (rect && rect.top >= 0 && rect.bottom <= innerHeight) {
-        setBurst({
-          x: rect.left + rect.width / 2,
-          y: rect.top + rect.height / 2,
-          id: Date.now(),
-        });
-        clearTimeout(expiry);
-        expiry = setTimeout(() => setBurst(null), 850);
-      }
-      const cart = document.querySelector(".cart-button");
-      cart?.animate(
-        [
-          { transform: "scale(1)" },
-          { transform: "scale(1.09) rotate(-3deg)" },
-          { transform: "scale(1)" },
-        ],
-        { duration: 430, easing: "cubic-bezier(.2,.8,.3,1)" },
-      );
+      const src =
+        (event as CustomEvent<{ source?: HTMLElement | null }>).detail
+          ?.source ?? (document.activeElement as HTMLElement | null);
+      const btn = src?.closest("button");
+      // Only the product-detail sheet keeps the paw burst: grid adds fly to the
+      // cart instead, and the cart stepper flicks a kibble.
+      if (!btn || !btn.closest(".modal") || btn.closest(".quantity")) return;
+      const rect = btn.getBoundingClientRect();
+      if (rect.top < 0 || rect.bottom > innerHeight) return;
+      setBurst({
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        id: Date.now(),
+      });
+      clearTimeout(expiry);
+      expiry = setTimeout(() => setBurst(null), 850);
     };
     const stop = () => {
       if (!allowed()) {

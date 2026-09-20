@@ -18,6 +18,19 @@ import {
   statusLabels,
 } from "../lib/catalog";
 import { Modal } from "./ui";
+import { PawLoader, SkeletonCards } from "./cute/flow-loader";
+import {
+  OrderParty,
+  OrdersEmptyScene,
+  clearParty,
+  peekParty,
+  stashParty,
+} from "./cute/flow-party";
+import { OrderTracker } from "./cute/flow-tracker";
+import { PetFace, TreatIcon } from "./cute/core-faces";
+import { burst, rain } from "./cute/core-fx";
+import { emit } from "./cute/core-events";
+import { motionAllowed } from "./cute/core-motion";
 export function Checkout({
   cart,
   products,
@@ -74,9 +87,17 @@ export function Checkout({
           requestId,
         }),
       });
-      const d: any = await res.json();
+      const d = (await res.json()) as {
+        error?: string;
+        code?: string;
+        order?: { code?: string };
+      };
       if (!res.ok) throw Error(d.error || "สร้างคำสั่งซื้อไม่สำเร็จ");
       sessionStorage.removeItem("pawpal-checkout-id");
+      const code = d.code ?? d.order?.code;
+      stashParty(code);
+      emit("pawpal:order-placed", { code });
+      rain({ kinds: ["paw", "bone", "fish", "heart", "carrot"] });
       done();
     } catch (e) {
       setError((e as Error).message);
@@ -89,7 +110,7 @@ export function Checkout({
       <Modal title="ส่งความสุขไปที่ไหนดี?" close={close}>
         <div className="empty-state">
           {auth === "checking" ? (
-            <p>กำลังตรวจสอบบัญชี…</p>
+            <PawLoader label="กำลังตรวจสอบบัญชี…" />
           ) : (
             <>
               <Package size={40} />
@@ -214,6 +235,13 @@ export function Checkout({
           </div>
         )}
         <button className="primary-button full" disabled={busy}>
+          {busy && (
+            <span className="cf-walk-paws" aria-hidden="true">
+              <TreatIcon kind="paw" size={14} />
+              <TreatIcon kind="paw" size={14} />
+              <TreatIcon kind="paw" size={14} />
+            </span>
+          )}
           {busy
             ? "กำลังสร้างคำสั่งซื้อ…"
             : settings.demo
@@ -238,7 +266,10 @@ export function Orders({
   const [orders, setOrders] = useState<any[]>([]),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
-    [busy, setBusy] = useState("");
+    [busy, setBusy] = useState(""),
+    [uploaded, setUploaded] = useState(""),
+    [party, setParty] = useState(() => peekParty());
+  const slipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   async function load() {
     try {
       const r = await fetch("/api/orders");
@@ -255,9 +286,13 @@ export function Orders({
   useEffect(() => {
     load();
     const id = setInterval(load, 15000);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      if (slipTimer.current) clearTimeout(slipTimer.current);
+      clearParty();
+    };
   }, []);
-  async function upload(id: string, file: File | undefined) {
+  async function upload(id: string, file: File | undefined, from?: DOMRect) {
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
       setError("รูปสลิปต้องมีขนาดไม่เกิน 5 MB");
@@ -274,6 +309,17 @@ export function Orders({
       const d: any = await r.json();
       if (!r.ok) throw Error(d.error);
       await load();
+      setUploaded(id);
+      if (slipTimer.current) clearTimeout(slipTimer.current);
+      slipTimer.current = setTimeout(() => setUploaded(""), 3000);
+      if (from)
+        burst({
+          x: from.left + from.width / 2,
+          y: from.top + from.height / 2,
+          kinds: ["paw", "heart"],
+          count: 6,
+          size: 14,
+        });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -282,6 +328,15 @@ export function Orders({
   }
   return (
     <Modal title="คำสั่งซื้อของฉัน" close={close}>
+      {party && (
+        <OrderParty
+          code={party.code}
+          onClose={() => {
+            setParty(null);
+            clearParty();
+          }}
+        />
+      )}
       {error && (
         <div className="error">
           {error}
@@ -293,10 +348,13 @@ export function Orders({
         </div>
       )}
       {loading ? (
-        <p className="muted">กำลังโหลดคำสั่งซื้อ…</p>
+        <>
+          <PawLoader label="กำลังโหลดคำสั่งซื้อ…" />
+          <SkeletonCards />
+        </>
       ) : !orders.length && !error ? (
         <div className="empty-state">
-          <Package size={44} />
+          <OrdersEmptyScene />
           <h3>ยังไม่มีคำสั่งซื้อ</h3>
           <p>เมื่อสั่งซื้อแล้ว คุณติดตามความสุขได้ที่นี่</p>
         </div>
@@ -309,6 +367,7 @@ export function Orders({
                 {statusLabels[o.status]}
               </span>
             </div>
+            <OrderTracker status={o.status} />
             <small className="muted">
               {new Date(o.createdAt).toLocaleString("th-TH")}
               {o.demo ? " • คำสั่งซื้อทดลอง" : ""}
@@ -354,20 +413,35 @@ export function Orders({
                   )}
                 </div>
                 <label className="upload-label">
-                  {busy === o.id
-                    ? "กำลังส่งสลิป…"
-                    : o.status === "reviewing"
-                      ? "แนบสลิปใหม่"
-                      : "แนบสลิปการโอนเงิน"}
+                  {busy === o.id ? (
+                    <PawLoader size="sm" label="กำลังส่งสลิป…" />
+                  ) : o.status === "reviewing" ? (
+                    "แนบสลิปใหม่"
+                  ) : (
+                    "แนบสลิปการโอนเงิน"
+                  )}
                   <input
                     aria-label={`แนบสลิป ${o.code}`}
                     type="file"
                     accept="image/png,image/jpeg,image/webp"
                     disabled={busy === o.id}
-                    onChange={(e) => upload(o.id, e.target.files?.[0])}
+                    onChange={(e) =>
+                      upload(
+                        o.id,
+                        e.target.files?.[0],
+                        e.currentTarget
+                          .closest(".upload-label")
+                          ?.getBoundingClientRect(),
+                      )
+                    }
                   />
                   <small>JPG, PNG หรือ WebP ไม่เกิน 5 MB</small>
                 </label>
+                {uploaded === o.id && (
+                  <span className="cf-slip-ok" role="status">
+                    ส่งสลิปแล้ว ขอบคุณน้า ♡
+                  </span>
+                )}
               </>
             )}
           </div>
@@ -398,6 +472,7 @@ export function Chat({
     messageList = useRef<HTMLDivElement>(null),
     nearBottom = useRef(true),
     currentRequest = useRef<AbortController | null>(null),
+    seen = useRef<Set<string> | null>(null),
     isOpen = useRef(open);
   isOpen.current = open;
   function close() {
@@ -489,6 +564,42 @@ export function Chat({
     const list = messageList.current;
     if (open && list && nearBottom.current) list.scrollTop = list.scrollHeight;
   }, [messages, open]);
+  useEffect(() => {
+    const ids = messages.map((m) => String(m.id));
+    const known = seen.current;
+    if (!known) {
+      seen.current = new Set(ids);
+      return;
+    }
+    const replies = messages.filter(
+      (m) => m.sender === "admin" && !known.has(String(m.id)),
+    );
+    for (const id of ids) known.add(id);
+    if (!replies.length || !motionAllowed()) return;
+    const avatar = document.querySelector<HTMLElement>(
+      ".chat-dock .chat-avatar",
+    );
+    if (!avatar) return;
+    const box = avatar.getBoundingClientRect();
+    const wiggle = avatar.animate(
+      [
+        { rotate: "0deg" },
+        { rotate: "-12deg" },
+        { rotate: "10deg" },
+        { rotate: "0deg" },
+      ],
+      { duration: 500, easing: "ease-in-out" },
+    );
+    burst({
+      x: box.left + box.width / 2,
+      y: box.top + box.height / 2,
+      kinds: ["heart"],
+      count: 3,
+      size: 12,
+      distance: [18, 32],
+    });
+    return () => wiggle.cancel();
+  }, [messages]);
   async function send(e: FormEvent) {
     e.preventDefault();
     if (!text.trim() || sending || signedOut) return;
@@ -586,8 +697,8 @@ export function Chat({
                 </div>
               )}
               {!loaded && (
-                <p className="chat-loading" role="status">
-                  กำลังเปิดห้องแชต…
+                <p className="chat-loading">
+                  <PawLoader size="sm" label="กำลังเปิดห้องแชต…" />
                 </p>
               )}
               <div
@@ -602,7 +713,16 @@ export function Chat({
                     key={m.id}
                     className={`bubble ${m.sender === "customer" ? "mine" : ""}`}
                   >
-                    <small>{m.sender === "admin" ? "ทีม PAWPAL" : "คุณ"}</small>
+                    <small>
+                      {m.sender === "admin" ? (
+                        <>
+                          <PetFace kind="dog" mood="happy" size={16} />
+                          ทีม PAWPAL
+                        </>
+                      ) : (
+                        "คุณ"
+                      )}
+                    </small>
                     <p>{m.text}</p>
                     <time>
                       {new Date(m.createdAt).toLocaleTimeString("th-TH", {
@@ -612,6 +732,15 @@ export function Chat({
                     </time>
                   </div>
                 ))}
+                {sending && (
+                  <div className="bubble mine cf-sending" aria-hidden="true">
+                    <span className="cf-walk-paws">
+                      <TreatIcon kind="paw" size={14} />
+                      <TreatIcon kind="paw" size={14} />
+                      <TreatIcon kind="paw" size={14} />
+                    </span>
+                  </div>
+                )}
               </div>
               {signedOut && (
                 <div className="chat-signin">

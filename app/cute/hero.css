@@ -1,0 +1,434 @@
+/* PAWPAL cute — hero shell: emotes, pet chips, love meter, headline, floaties, photo. Prefix: ch- */
+
+/* ---------- head-anchored emote bubbles ---------- */
+
+.ch-emotes {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+.ch-emote {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.ch-emote.is-on {
+  opacity: 1;
+}
+.ch-emote.is-on i {
+  animation: ch-emote-pop 0.38s cubic-bezier(0.2, 0.8, 0.2, 1.4) both;
+}
+.ch-emote i {
+  display: inline-block;
+  font-style: normal;
+}
+.ch-emote-zz {
+  font-family: "Outfit", sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: #9873b6;
+  letter-spacing: 2px;
+}
+.ch-emote-alert {
+  font-family: "Outfit", sans-serif;
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 1px;
+}
+.ch-emote-count {
+  font-family: "Outfit", sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1.1;
+  padding: 4px 14px;
+}
+@keyframes ch-emote-pop {
+  from {
+    transform: translateY(6px) scale(0.6);
+  }
+  62% {
+    transform: translateY(0) scale(1.08);
+  }
+  to {
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ---------- pet chips ---------- */
+
+/* .world-stage hangs past the hero's right edge and .world-hero clips it, so
+   the chips need an inset that clears the bleed plus the focus ring. */
+.ch-pets {
+  position: absolute;
+  right: 7%;
+  top: 36%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 3;
+}
+.ch-pets button {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  background: #faf6ffb3;
+  border: 1px solid #ffffffb3;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 18px #55406b12;
+  transition:
+    transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1.4),
+    background 0.2s;
+}
+.ch-pets button:hover {
+  background: #fff;
+  transform: rotate(-8deg);
+}
+.ch-pets button:active {
+  transform: translateY(3px) scale(0.97);
+}
+.ch-pets button:focus-visible {
+  outline: 3px solid #6542a0;
+  outline-offset: 3px;
+}
+.ch-pets button[aria-pressed="true"] {
+  background: #f8e98e;
+}
+.ch-pets button:disabled {
+  opacity: 0.5;
+}
+.ch-pets button svg {
+  display: block;
+  overflow: visible;
+}
+
+/* ---------- love meter pill ---------- */
+
+.world-sticker .ch-love {
+  position: absolute;
+  left: -8px;
+  bottom: 4px;
+  background: #30233f;
+  color: #f8e98e;
+  font-family: "Outfit", sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  padding: 5px 9px;
+  border-radius: 12px;
+  white-space: nowrap;
+  animation: ch-love-pop 0.42s cubic-bezier(0.2, 0.8, 0.2, 1.4) both;
+}
+@keyframes ch-love-pop {
+  0% {
+    scale: 0.5;
+    rotate: -14deg;
+  }
+  55% {
+    scale: 1.18;
+    rotate: 7deg;
+  }
+  100% {
+    scale: 1;
+    rotate: 0deg;
+  }
+}
+
+/* ---------- bouncy headline ---------- */
+
+.ch-word {
+  display: inline;
+}
+.ch-letter {
+  display: inline-block;
+  animation: ch-letter-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1.4)
+    calc(var(--i) * 35ms + 0.15s) both;
+}
+@keyframes ch-letter-in {
+  from {
+    translate: 0 0.28em;
+    rotate: -8deg;
+  }
+  to {
+    translate: 0 0;
+    rotate: 0deg;
+  }
+}
+@media (hover: hover) {
+  .ch-letter {
+    --tilt: 7deg;
+    transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1.6);
+  }
+  .ch-letter:nth-child(even) {
+    --tilt: -7deg;
+  }
+  .ch-letter:hover {
+    transform: translateY(-0.2em) rotate(var(--tilt));
+  }
+}
+.is-waving .ch-letter > span {
+  display: inline-block;
+  animation: ch-letter-wave 0.6s cubic-bezier(0.2, 0.8, 0.2, 1.4)
+    calc(var(--i) * 28ms);
+}
+@keyframes ch-letter-wave {
+  0%,
+  100% {
+    translate: 0 0;
+    rotate: 0deg;
+  }
+  32% {
+    translate: 0 -0.22em;
+    rotate: 9deg;
+  }
+  64% {
+    translate: 0 -0.05em;
+    rotate: -5deg;
+  }
+}
+.world-copy .happy-line svg {
+  animation: ch-heartbeat 3.2s ease-in-out infinite;
+}
+@keyframes ch-heartbeat {
+  0%,
+  16%,
+  34%,
+  100% {
+    scale: 1;
+  }
+  8% {
+    scale: 1.14;
+  }
+  24% {
+    scale: 1.1;
+  }
+}
+
+/* ---------- dreamy floaties ---------- */
+
+.ch-floaties {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.ch-float {
+  position: absolute;
+  left: var(--x);
+  bottom: var(--rest);
+  width: var(--s);
+  height: var(--s);
+  opacity: 0.45;
+  animation: ch-rise var(--d) linear var(--delay) infinite;
+}
+@keyframes ch-rise {
+  0% {
+    translate: 0 45vh;
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.55;
+  }
+  85% {
+    opacity: 0.55;
+  }
+  100% {
+    translate: 0 -55vh;
+    opacity: 0;
+  }
+}
+.ch-float i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  animation: ch-sway 3.4s ease-in-out infinite alternate;
+}
+.ch-float svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+@keyframes ch-sway {
+  from {
+    translate: -10px 0;
+    rotate: -8deg;
+  }
+  to {
+    translate: 10px 0;
+    rotate: 8deg;
+  }
+}
+.ch-float-bubble i {
+  border-radius: 50%;
+  border: 1px solid #faf5ff99;
+  background: radial-gradient(
+    circle at 30% 30%,
+    #fff 0 10%,
+    #ffffff66 11%,
+    #e9ddff22 60%,
+    transparent 70%
+  );
+}
+.ch-floaties.is-idle * {
+  animation-play-state: paused;
+}
+
+/* ---------- photo controls ---------- */
+
+.world-controls .ch-icon {
+  width: 42px;
+  padding: 0;
+}
+.ch-flash {
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* ---------- polaroid modal ---------- */
+
+.ch-photo-modal .ch-photo-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 18px;
+  background: #efe6fa;
+  box-shadow: 0 12px 30px #30233f1f;
+}
+.ch-photo-modal .ch-photo-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  margin-top: 18px;
+}
+.ch-photo-modal .ch-photo-actions > * {
+  flex: 1;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+}
+.ch-photo-modal .secondary-button {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* ---------- responsive ---------- */
+
+/* The stage bleeds further past the hero edge at these widths; keep the chips
+   inside the clip. Must stay above the 640 block, which re-anchors them left. */
+@media (max-width: 1150px) {
+  .ch-pets {
+    right: 10%;
+  }
+}
+@media (max-width: 900px) {
+  .ch-pets {
+    right: 14%;
+  }
+}
+@media (min-width: 1500px) {
+  .ch-pets {
+    right: 3.5%;
+  }
+}
+
+@media (max-width: 640px) {
+  .ch-emote i {
+    font-size: 11px;
+    max-width: 120px;
+    white-space: normal;
+  }
+  .ch-emote-count {
+    font-size: 19px;
+    padding: 3px 11px;
+  }
+  .ch-pets {
+    flex-direction: row;
+    top: 3%;
+    left: calc(40px + 3%);
+    right: auto;
+    gap: 6px;
+  }
+  .ch-pets button {
+    width: 37px;
+    height: 37px;
+  }
+  .world-controls .ch-icon {
+    width: 37px;
+  }
+  .ch-float {
+    width: calc(var(--s) * 0.75);
+    height: calc(var(--s) * 0.75);
+  }
+  .ch-float:nth-child(n + 7) {
+    display: none;
+  }
+  .world-sticker .ch-love {
+    font-size: 10px;
+    padding: 4px 7px;
+    left: -6px;
+    bottom: 2px;
+  }
+}
+
+/* ---------- motion gates ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .ch-letter,
+  .ch-letter > span,
+  .world-copy .happy-line svg,
+  .ch-float,
+  .ch-float i,
+  .ch-emote,
+  .ch-emote i,
+  .world-sticker .ch-love,
+  .ch-pets button {
+    animation: none;
+    transition: none;
+  }
+  .ch-float {
+    opacity: 0.4;
+  }
+  .ch-letter:hover {
+    transform: none;
+  }
+}
+
+html[data-pawpal-motion="off"] .ch-letter,
+html[data-pawpal-motion="off"] .ch-letter > span,
+html[data-pawpal-motion="off"] .world-copy .happy-line svg,
+html[data-pawpal-motion="off"] .ch-float,
+html[data-pawpal-motion="off"] .ch-float i {
+  animation-play-state: paused;
+}
+html[data-pawpal-motion="off"] .ch-letter {
+  /* a paused entrance must still read as finished art */
+  translate: 0 0 !important;
+  rotate: 0deg !important;
+}
+html[data-pawpal-motion="off"] .ch-letter:hover {
+  transform: none;
+}
+html[data-pawpal-motion="off"] .ch-emote i {
+  animation: none;
+}
+html[data-pawpal-motion="off"] .ch-emote {
+  transition: none;
+}
+html[data-pawpal-motion="off"] .ch-pets button {
+  transition: none;
+}
+html[data-pawpal-motion="off"] .world-sticker .ch-love {
+  animation: none;
+}

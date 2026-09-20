@@ -2,17 +2,22 @@
 import { ArrowUpRight, Heart, PawPrint, Sparkles } from "lucide-react";
 import { Brand } from "./ui";
 import { pets } from "../lib/catalog";
+import { CuteAmbient } from "./cute/core-ambient";
+import { CoreBalloonTop } from "./cute/core-balloon";
+import { CoreMotionToggle } from "./cute/core-motion-toggle";
 
 export function PetFooter({
   shop,
   orders,
   info,
   chat,
+  pet,
 }: {
   shop: (pet?: string) => void;
   orders: () => void;
   info: (title: string) => void;
   chat: () => void;
+  pet?: string;
 }) {
   return (
     <footer className="pet-footer">
@@ -102,12 +107,16 @@ export function PetFooter({
         </div>
         <div className="footer-fineprint">
           <span>© {new Date().getFullYear()} PAWPAL</span>
+          <CoreBalloonTop />
           <button onClick={() => info("ความเป็นส่วนตัว")}>
             นโยบายความเป็นส่วนตัว
           </button>
+          <CoreMotionToggle />
+          <span className="cc-psst">psst… ลองพิมพ์ meow ดูสิ</span>
           <span>TH / ฿ THB</span>
         </div>
       </div>
+      <CuteAmbient pet={pet ?? "all"} />
     </footer>
   );
 }

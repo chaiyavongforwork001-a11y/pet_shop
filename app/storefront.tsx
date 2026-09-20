@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import {
   PawPrint,
   Search,
@@ -36,6 +37,27 @@ import { WorldHero, MotionLayer } from "./experience";
 import ProductDetail from "./product-detail";
 import { PetFooter } from "./footer";
 import { PetMotion } from "./pet-motion";
+import { motionAllowed } from "./cute/core-motion";
+import { CorePawSteps } from "./cute/core-pawsteps";
+import { emit, faceKindOf } from "./cute/core-events";
+import { PetFace } from "./cute/core-faces";
+import { ShopDelight } from "./cute/shop-delight";
+import { EmptyScene } from "./cute/shop-empty";
+import { ShopFreeShip } from "./cute/shop-freeship";
+import { ShopSniffer } from "./cute/shop-sniffer";
+
+type ToastKind = "cart" | "stock" | "info" | "wait";
+type ToastMessage = {
+  text: string;
+  kind: ToastKind;
+  pet?: string;
+  id: number;
+};
+const HELLO_LINES = [
+  "โฮ่ง! ของอร่อยอยู่ตรงนี้",
+  "เมี้ยว~ มาเลือกของเล่นกัน",
+  "ฟุดฟิด ♡ มีแครอทไหม?",
+];
 export default function Storefront() {
   const [products, setProducts] = useState<Product[]>(seedProducts),
     [settings, setSettings] = useState<ShopSettings>(defaultSettings),
@@ -55,10 +77,15 @@ export default function Storefront() {
     [chatOpen, setChatOpen] = useState(false),
     [menu, setMenu] = useState(false),
     [info, setInfo] = useState(""),
-    [toast, setToast] = useState(""),
+    [toast, setToast] = useState<ToastMessage | null>(null),
     [ordersOpen, setOrdersOpen] = useState(false),
     [unavailable, setUnavailable] = useState(false);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [rowHop, setRowHop] = useState(false);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const dealt = useRef(false);
+  const notify = (text: string, kind: ToastKind = "info", pet?: string) =>
+    setToast({ text, kind, pet, id: Date.now() });
   useEffect(() => {
     try {
       const c = JSON.parse(localStorage.getItem("pawpal-cart") || "[]"),
@@ -96,11 +123,11 @@ export default function Storefront() {
     }
   }, [cart, saved, ready]);
   useEffect(() => {
-    if (toast) {
-      const t = setTimeout(() => setToast(""), 3200);
+    if (toast?.id) {
+      const t = setTimeout(() => setToast(null), 3200);
       return () => clearTimeout(t);
     }
-  }, [toast]);
+  }, [toast?.id]);
   const showProducts = (p = "all") => {
     setPet(p);
     setOnlySaved(false);
@@ -111,11 +138,15 @@ export default function Storefront() {
         : "smooth",
     });
   };
-  function add(p: Product, quantity = 1) {
+  function add(p: Product, quantity = 1, source?: HTMLElement | null) {
+    if (!catalogLoaded && !unavailable) {
+      notify("รอแป๊บนะ ร้านกำลังเตรียมของให้อยู่", "wait");
+      return false;
+    }
     if (!catalogLoaded || unavailable || p.stock < 1) return false;
     const current = cart.find((i) => i.id === p.id);
     if ((current?.quantity || 0) + quantity > Math.min(p.stock, 99)) {
-      setToast("เพิ่มครบตามจำนวนที่มีในสต็อกแล้ว");
+      notify("เพิ่มครบตามจำนวนที่มีในสต็อกแล้ว", "stock", p.pet);
       return false;
     }
     setCart((prev) => {
@@ -128,9 +159,27 @@ export default function Storefront() {
           )
         : [...prev, { id: p.id, quantity }];
     });
-    setToast(`เพิ่ม ${p.name} ลงตะกร้าแล้ว`);
-    window.dispatchEvent(new Event("pawpal:cart-added"));
+    notify(`เพิ่ม ${p.name} ลงตะกร้าแล้ว`, "cart", p.pet);
+    emit("pawpal:cart-added", {
+      productId: p.id,
+      pet: p.pet,
+      quantity,
+      // Only an image the grid already painted: productImages() synthesizes a
+      // full-size URL the card never loads, so the flyer would fetch it fresh.
+      image: p.image || p.images?.[0],
+      source: source ?? null,
+    });
     return true;
+  }
+  function toggleSaved(p: Product, source?: HTMLElement | null) {
+    const next = !saved.includes(p.id);
+    setSaved((s) => (next ? [...s, p.id] : s.filter((id) => id !== p.id)));
+    emit("pawpal:favorite", {
+      productId: p.id,
+      pet: p.pet,
+      saved: next,
+      source: source ?? null,
+    });
   }
   function openProduct(p: Product) {
     const url = new URL(location.href);
@@ -172,7 +221,11 @@ export default function Storefront() {
         setCheckout(false);
         setDirectCart(null);
         if (params.has("buy")) {
-          setToast("จำนวนสินค้าหรือสต็อกเปลี่ยนไป กรุณาเลือกสินค้าใหม่");
+          setToast({
+            text: "จำนวนสินค้าหรือสต็อกเปลี่ยนไป กรุณาเลือกสินค้าใหม่",
+            kind: "info",
+            id: Date.now(),
+          });
           const url = new URL(location.href);
           url.searchParams.delete("buy");
           history.replaceState(history.state, "", url);
@@ -209,6 +262,33 @@ export default function Storefront() {
           ? b.price - a.price
           : 0,
     );
+  useEffect(() => {
+    if (!dealt.current) {
+      dealt.current = true;
+      return;
+    }
+    const grid = gridRef.current;
+    if (!grid || !motionAllowed()) return;
+    if (grid.getBoundingClientRect().top >= window.innerHeight) return;
+    const cards = Array.from(
+      grid.querySelectorAll<HTMLElement>(".product-card"),
+    ).slice(0, 6);
+    const running = cards.map((card, i) =>
+      card.animate(
+        [
+          { opacity: 0.6, transform: "translateY(10px) scale(.97)" },
+          { opacity: 1, transform: "none" },
+        ],
+        {
+          duration: 300,
+          delay: i * 30,
+          easing: "cubic-bezier(.2,.8,.3,1.25)",
+          fill: "backwards",
+        },
+      ),
+    );
+    return () => running.forEach((animation) => animation.cancel());
+  }, [pet, category, onlySaved, sort]);
   useEffect(() => {
     const context = (document as any).modelContext;
     if (!context?.registerTool) return;
@@ -299,7 +379,7 @@ export default function Storefront() {
               <Search size={21} />
             </button>
             <button
-              className="icon-button"
+              className="icon-button fav-button"
               aria-label="สินค้าที่ชอบ"
               onClick={() => {
                 showProducts();
@@ -320,7 +400,15 @@ export default function Storefront() {
             <button
               className="cart-button"
               aria-label={`ตะกร้าของฉัน ${count}`}
-              onClick={() => setCartOpen(true)}
+              onClick={() => {
+                let first = false;
+                try {
+                  first = !sessionStorage.getItem("pawpal-cart-hop");
+                  sessionStorage.setItem("pawpal-cart-hop", "1");
+                } catch {}
+                setRowHop(first);
+                setCartOpen(true);
+              }}
             >
               <ShoppingBag size={19} />
               <span>ตะกร้าของฉัน</span>
@@ -384,6 +472,7 @@ export default function Storefront() {
       </header>
       <MotionLayer />
       <PetMotion />
+      <ShopDelight />
       <main>
         <WorldHero shop={showProducts} />
         <div className="love-ribbon" aria-hidden="true">
@@ -397,6 +486,7 @@ export default function Storefront() {
           </div>
         </div>
         <section className="pet-section wrap" data-reveal>
+          <CorePawSteps kind="dog" end="bone" place="top" />
           <div className="section-heading editorial-heading">
             <div>
               <span className="kicker">01 — FIND THEIR HAPPY PLACE</span>
@@ -428,6 +518,9 @@ export default function Storefront() {
                     alt={p.name}
                     loading="lazy"
                   />
+                </span>
+                <span className="cs-pet-hello" aria-hidden="true">
+                  <i className="cc-bubble">{HELLO_LINES[i]}</i>
                 </span>
                 <span className="pet-card-bottom">
                   <span>
@@ -498,12 +591,16 @@ export default function Storefront() {
                   <X size={16} />
                 </button>
               )}
+              <ShopSniffer
+                mood={search ? (shown.length ? "found" : "lost") : "idle"}
+              />
             </label>
           </div>
           <div className="catalog-meta">
             <div>
               {pet !== "all" && (
                 <button className="filter-chip" onClick={() => setPet("all")}>
+                  <PetFace kind={faceKindOf(pet)} size={16} mood="happy" />
                   {pets.find((p) => p.id === pet)?.name}
                   <X size={13} />
                 </button>
@@ -534,9 +631,14 @@ export default function Storefront() {
               <button onClick={() => location.reload()}>ลองใหม่</button>
             </div>
           )}
-          <div className="product-grid">
+          <div className="product-grid" ref={gridRef}>
             {shown.map((p) => (
-              <article className="product-card" key={p.id}>
+              <article
+                className="product-card"
+                key={p.id}
+                data-pet={p.pet}
+                data-product-id={p.id}
+              >
                 <div className={`product-visual product-bg-${p.art}`}>
                   <button
                     className="product-art-button"
@@ -550,13 +652,7 @@ export default function Storefront() {
                     className={`save-button ${saved.includes(p.id) ? "saved" : ""}`}
                     aria-label={`${saved.includes(p.id) ? "เลิกบันทึก" : "บันทึก"} ${p.name}`}
                     aria-pressed={saved.includes(p.id)}
-                    onClick={() =>
-                      setSaved((s) =>
-                        s.includes(p.id)
-                          ? s.filter((id) => id !== p.id)
-                          : [...s, p.id],
-                      )
-                    }
+                    onClick={(e) => toggleSaved(p, e.currentTarget)}
                   >
                     <Heart
                       size={17}
@@ -586,34 +682,67 @@ export default function Storefront() {
                     <button
                       className="add-button"
                       disabled={!p.stock}
-                      onClick={() => add(p)}
-                      aria-label={`เพิ่ม ${p.name} ลงตะกร้า`}
+                      onClick={(e) => add(p, 1, e.currentTarget)}
+                      aria-label={
+                        p.stock
+                          ? `เพิ่ม ${p.name} ลงตะกร้า`
+                          : `${p.name} หมดชั่วคราว`
+                      }
                     >
-                      {p.stock ? <PawPrint size={22} /> : <span>หมด</span>}
+                      {p.stock ? (
+                        <PawPrint size={22} />
+                      ) : (
+                        <span className="cs-soldout">
+                          <i className="cc-zz cs-z" aria-hidden="true">
+                            z
+                          </i>
+                          หมด
+                        </span>
+                      )}
                     </button>
                   </div>
                 </div>
               </article>
             ))}
           </div>
-          {!shown.length && (
-            <div className="empty-state">
-              <Search size={38} />
-              <h3>ยังไม่เจอของที่กำลังหา</h3>
-              <p>ลองเปลี่ยนคำค้นหาหรือเลือกหมวดหมู่อื่นดูนะ</p>
-              <button
-                className="secondary-button"
-                onClick={() => {
-                  setSearch("");
-                  setPet("all");
-                  setCategory("ทั้งหมด");
-                  setOnlySaved(false);
-                }}
-              >
-                ดูสินค้าทั้งหมด
-              </button>
-            </div>
-          )}
+          {!shown.length &&
+            (onlySaved && saved.length === 0 ? (
+              <div className="empty-state">
+                <EmptyScene scene="saved" />
+                <h3>ยังไม่มีของโปรดเลย</h3>
+                <p>
+                  แตะ ♡ บนสินค้าที่ถูกใจ แล้วน้องกระต่ายจะเก็บไว้ให้ตรงนี้
+                </p>
+                <button
+                  className="secondary-button"
+                  onClick={() => setOnlySaved(false)}
+                >
+                  ไปเลือกของโปรด
+                </button>
+              </div>
+            ) : (
+              <div className="empty-state">
+                <EmptyScene scene="search" />
+                <h3>ยังไม่เจอของที่กำลังหา</h3>
+                <p>
+                  {search
+                    ? `ดมหาทั่วแล้ว ยังไม่เจอ “${search}” ลองคำอื่นดูนะ`
+                    : "ลองเปลี่ยนคำค้นหาหรือเลือกหมวดหมู่อื่นดูนะ"}
+                </p>
+                <button
+                  className="secondary-button"
+                  onClick={() => {
+                    setSearch("");
+                    setPet("all");
+                    setCategory("ทั้งหมด");
+                    setOnlySaved(false);
+                  }}
+                >
+                  ดูสินค้าทั้งหมด
+                </button>
+              </div>
+            ))}
+          <CorePawSteps kind="rabbit" end="carrot" place="bottom" />
         </section>
         <section className="care-story wrap" data-reveal>
           <div className="care-world">
@@ -683,13 +812,31 @@ export default function Storefront() {
         orders={() => setOrdersOpen(true)}
         info={setInfo}
         chat={() => setChatOpen(true)}
+        pet={pet}
       />
-      {toast && (
-        <div className="toast" role="status">
-          <Check size={18} />
-          {toast}
-        </div>
-      )}
+      <div className="cs-toast-region" role="status" aria-live="polite">
+        {toast && (
+          <div
+            key={toast.id}
+            className={`toast cs-toast cs-toast-${toast.kind}`}
+          >
+            <PetFace
+              kind={faceKindOf(toast.pet)}
+              mood={
+                toast.kind === "stock"
+                  ? "worried"
+                  : toast.kind === "wait"
+                    ? "sleepy"
+                    : "happy"
+              }
+              size={34}
+              className="cs-toast-face cc-anim-blink cc-anim-ears"
+            />
+            <Check size={18} aria-hidden="true" />
+            {toast.text}
+          </div>
+        )}
+      </div>
       {detail && !checkout && (
         <ProductDetail
           key={detail.id}
@@ -701,13 +848,22 @@ export default function Storefront() {
           inCart={cart.find((i) => i.id === detail.id)?.quantity || 0}
           close={closeProduct}
           favorite={() =>
-            setSaved((s) =>
-              s.includes(detail.id)
-                ? s.filter((id) => id !== detail.id)
-                : [...s, detail.id],
+            toggleSaved(
+              detail,
+              document.querySelector<HTMLElement>(
+                ".product-sheet .pdp-brand > button",
+              ),
             )
           }
-          add={(quantity) => add(detail, quantity)}
+          add={(quantity) =>
+            add(
+              detail,
+              quantity,
+              document.querySelector<HTMLElement>(
+                ".product-sheet .pdp-actions .pet-action.soft",
+              ),
+            )
+          }
           buy={(quantity) => {
             setDirectCart([{ id: detail.id, quantity }]);
             const url = new URL(location.href);
@@ -738,19 +894,23 @@ export default function Storefront() {
                     ? "เย้! ได้รับสิทธิ์ส่งฟรีแล้ว"
                     : `อีก ${money(settings.freeShipping - subtotal)} ก็ส่งฟรีแล้วนะ`}
                 </p>
-                <div>
-                  <span
-                    style={{
-                      width: `${Math.min(100, (subtotal / settings.freeShipping) * 100)}%`,
-                    }}
-                  />
-                </div>
+                <ShopFreeShip
+                  subtotal={subtotal}
+                  threshold={settings.freeShipping}
+                />
               </div>
-              <div className="cart-items">
-                {cart.map((item) => {
+              <div className={`cart-items${rowHop ? " cs-rows-hop" : ""}`}>
+                {cart.map((item, i) => {
                   const p = products.find((p) => p.id === item.id);
+                  const full = p
+                    ? item.quantity >= Math.min(p.stock, 99)
+                    : false;
                   return p ? (
-                    <div className="cart-item" key={p.id}>
+                    <div
+                      className="cart-item"
+                      key={p.id}
+                      style={{ "--i": i } as CSSProperties}
+                    >
                       <div className="cart-art">
                         <ProductArt product={p} />
                       </div>
@@ -774,14 +934,21 @@ export default function Storefront() {
                           >
                             <Minus size={14} />
                           </button>
-                          <span>{item.quantity}</span>
+                          <span className="cs-qty-window">
+                            <span key={item.quantity} className="cs-qty">
+                              {item.quantity}
+                            </span>
+                          </span>
                           <button
-                            aria-label={`เพิ่มจำนวน ${p.name}`}
-                            disabled={item.quantity >= Math.min(p.stock, 99)}
-                            onClick={() => add(p)}
+                            aria-label={`เพิ่มจำนวน ${p.name}${full ? " (ครบตามสต็อกแล้ว)" : ""}`}
+                            disabled={full}
+                            onClick={(e) => add(p, 1, e.currentTarget)}
                           >
                             <Plus size={14} />
                           </button>
+                          {full && (
+                            <small className="cs-full">ครบตามสต็อกแล้ว</small>
+                          )}
                         </div>
                       </div>
                       <div className="cart-item-price">
@@ -840,7 +1007,7 @@ export default function Storefront() {
             </>
           ) : (
             <div className="empty-state">
-              <ShoppingBag size={45} />
+              <EmptyScene scene="cart" />
               <h3>เพื่อนซี้กำลังรอของโปรด</h3>
               <p>เลือกสิ่งดี ๆ มาเติมตะกร้ากัน</p>
               <button

@@ -1,0 +1,931 @@
+/* PAWPAL cute — core tokens and page-wide ambient toys. Prefix: cc- */
+
+/* ---------- shared tokens ---------- */
+
+.cc-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+  padding: 0;
+}
+
+.cc-bubble {
+  background: #fffdf9;
+  color: #30233f;
+  border-radius: 16px 16px 16px 5px;
+  padding: 5px 11px;
+  font: 600 12px/1.25 "Noto Sans Thai", sans-serif;
+  box-shadow: 0 3px 0 #d3bee2;
+  white-space: nowrap;
+}
+.cc-bubble.is-pop {
+  animation: cc-bubble-pop 0.38s cubic-bezier(0.2, 0.8, 0.2, 1.4) both;
+}
+@keyframes cc-bubble-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.6);
+  }
+  62% {
+    opacity: 1;
+    transform: translateY(0) scale(1.08);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.cc-zz {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 1px;
+  font-family: "Outfit", sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  color: #9873b6;
+  letter-spacing: 1px;
+}
+.cc-zz i {
+  font-style: normal;
+  display: inline-block;
+  opacity: 0;
+  animation: cc-zz-float 2.4s ease-in-out infinite;
+}
+.cc-zz i:nth-child(2) {
+  font-size: 0.82em;
+  animation-delay: 0.8s;
+}
+.cc-zz i:nth-child(3) {
+  font-size: 0.7em;
+  animation-delay: 1.6s;
+}
+@keyframes cc-zz-float {
+  0% {
+    translate: 0 0;
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    translate: 4px -12px;
+    opacity: 0;
+  }
+}
+
+.cc-fx {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  pointer-events: none;
+  overflow: hidden;
+  contain: strict;
+}
+.cc-fx-piece {
+  position: absolute;
+  left: 0;
+  top: 0;
+  line-height: 0;
+  will-change: transform, opacity;
+}
+.cc-fx-piece svg {
+  display: block;
+}
+
+/* ---------- face hooks ---------- */
+
+.cc-face {
+  display: block;
+  overflow: visible;
+}
+.cc-face-ear,
+.cc-face-eyes {
+  transform-box: fill-box;
+}
+.cc-face-ear {
+  transform-origin: 50% 100%;
+}
+.cc-face-eyes {
+  transform-origin: 50% 50%;
+}
+
+.cc-anim-blink .cc-face-eyes {
+  animation: cc-blink 4.6s linear infinite;
+}
+@keyframes cc-blink {
+  0%,
+  94.4%,
+  97.4%,
+  100% {
+    scale: 1 1;
+  }
+  95.4%,
+  96.4% {
+    scale: 1 0.1;
+  }
+}
+
+.cc-anim-ears .cc-face-ear-l {
+  animation: cc-ear-l 0.5s ease-in-out 2;
+}
+.cc-anim-ears .cc-face-ear-r {
+  animation: cc-ear-r 0.5s ease-in-out 2;
+}
+@keyframes cc-ear-l {
+  0%,
+  100% {
+    rotate: 0deg;
+  }
+  35% {
+    rotate: -14deg;
+  }
+  70% {
+    rotate: 6deg;
+  }
+}
+@keyframes cc-ear-r {
+  0%,
+  100% {
+    rotate: 0deg;
+  }
+  35% {
+    rotate: 14deg;
+  }
+  70% {
+    rotate: -6deg;
+  }
+}
+
+.cc-runner .cc-leg-a,
+.cc-runner .cc-leg-b,
+.cc-runner .cc-tail {
+  transform-box: fill-box;
+}
+.cc-runner .cc-leg-a,
+.cc-runner .cc-leg-b {
+  transform-origin: 50% 4%;
+}
+.cc-runner .cc-tail {
+  transform-origin: 92% 82%;
+}
+.cc-running .cc-leg-a {
+  animation: cc-legs 0.22s steps(2) infinite;
+}
+.cc-running .cc-leg-b {
+  animation: cc-legs 0.22s steps(2) infinite;
+  animation-delay: -0.11s;
+}
+.cc-running .cc-tail {
+  animation: cc-wag 0.3s ease-in-out alternate infinite;
+}
+@keyframes cc-legs {
+  from {
+    rotate: -11deg;
+  }
+  to {
+    rotate: 13deg;
+  }
+}
+@keyframes cc-wag {
+  from {
+    rotate: -13deg;
+  }
+  to {
+    rotate: 15deg;
+  }
+}
+
+/* ---------- playful cursors ---------- */
+
+@media (hover: hover) and (pointer: fine) {
+  html.pawpal-store {
+    --cc-cursor-paw: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28'><defs><path id='p' d='M14 11.6c3.9 0 6.9 2.7 6.9 5.7 0 2.3-2 3.7-4.1 3.7-1 0-1.7-.4-2.8-.4s-1.8.4-2.8.4c-2.1 0-4.1-1.4-4.1-3.7 0-3 3-5.7 6.9-5.7z M7.3 7a2.5 3 0 1 0 0 6 2.5 3 0 1 0 0-6z M12.6 4.8a2.5 3.2 0 1 0 0 6.4 2.5 3.2 0 1 0 0-6.4z M18.2 4.8a2.5 3.2 0 1 0 0 6.4 2.5 3.2 0 1 0 0-6.4z M22.9 7a2.5 3 0 1 0 0 6 2.5 3 0 1 0 0-6z'/></defs><use href='%23p' fill='none' stroke='%23fff' stroke-width='4' stroke-linejoin='round'/><use href='%23p' fill='%23f8e98e' stroke='%2330233f' stroke-width='1.6'/></svg>")
+      9 4, pointer;
+    --cc-cursor-paw-down: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28'><defs><path id='p' d='M14 11.6c3.9 0 6.9 2.7 6.9 5.7 0 2.3-2 3.7-4.1 3.7-1 0-1.7-.4-2.8-.4s-1.8.4-2.8.4c-2.1 0-4.1-1.4-4.1-3.7 0-3 3-5.7 6.9-5.7z M7.3 7a2.5 3 0 1 0 0 6 2.5 3 0 1 0 0-6z M12.6 4.8a2.5 3.2 0 1 0 0 6.4 2.5 3.2 0 1 0 0-6.4z M18.2 4.8a2.5 3.2 0 1 0 0 6.4 2.5 3.2 0 1 0 0-6.4z M22.9 7a2.5 3 0 1 0 0 6 2.5 3 0 1 0 0-6z'/></defs><g transform='translate(0 3.6)scale(1 .85)'><use href='%23p' fill='none' stroke='%23fff' stroke-width='4'/><use href='%23p' fill='%23f4e395' stroke='%2330233f' stroke-width='1.6'/></g></svg>")
+      9 4, pointer;
+    --cc-cursor-heart: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28'><defs><path id='p' d='M14 11.6c3.9 0 6.9 2.7 6.9 5.7 0 2.3-2 3.7-4.1 3.7-1 0-1.7-.4-2.8-.4s-1.8.4-2.8.4c-2.1 0-4.1-1.4-4.1-3.7 0-3 3-5.7 6.9-5.7z M7.3 7a2.5 3 0 1 0 0 6 2.5 3 0 1 0 0-6z M12.6 4.8a2.5 3.2 0 1 0 0 6.4 2.5 3.2 0 1 0 0-6.4z M18.2 4.8a2.5 3.2 0 1 0 0 6.4 2.5 3.2 0 1 0 0-6.4z M22.9 7a2.5 3 0 1 0 0 6 2.5 3 0 1 0 0-6z'/></defs><use href='%23p' fill='none' stroke='%23fff' stroke-width='4' stroke-linejoin='round'/><use href='%23p' fill='%23f8e98e' stroke='%2330233f' stroke-width='1.6'/><path d='M14 14.6c-1-1.1-2.9-.6-2.9 1.1 0 1.4 1.9 2.5 2.9 3.4 1-.9 2.9-2 2.9-3.4 0-1.7-1.9-2.2-2.9-1.1z' fill='%23f3a8ad' stroke='%2330233f' stroke-width='1.2' stroke-linejoin='round'/></svg>")
+      9 4, pointer;
+    --cc-cursor-heart-down: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28'><defs><path id='p' d='M14 11.6c3.9 0 6.9 2.7 6.9 5.7 0 2.3-2 3.7-4.1 3.7-1 0-1.7-.4-2.8-.4s-1.8.4-2.8.4c-2.1 0-4.1-1.4-4.1-3.7 0-3 3-5.7 6.9-5.7z M7.3 7a2.5 3 0 1 0 0 6 2.5 3 0 1 0 0-6z M12.6 4.8a2.5 3.2 0 1 0 0 6.4 2.5 3.2 0 1 0 0-6.4z M18.2 4.8a2.5 3.2 0 1 0 0 6.4 2.5 3.2 0 1 0 0-6.4z M22.9 7a2.5 3 0 1 0 0 6 2.5 3 0 1 0 0-6z'/></defs><g transform='translate(0 3.6)scale(1 .85)'><use href='%23p' fill='none' stroke='%23fff' stroke-width='4'/><use href='%23p' fill='%23f4e395' stroke='%2330233f' stroke-width='1.6'/><path d='M14 14.6c-1-1.1-2.9-.6-2.9 1.1 0 1.4 1.9 2.5 2.9 3.4 1-.9 2.9-2 2.9-3.4 0-1.7-1.9-2.2-2.9-1.1z' fill='%23f3a8ad' stroke='%2330233f' stroke-width='1.2' stroke-linejoin='round'/></g></svg>")
+      9 4, pointer;
+  }
+  html.pawpal-store
+    :is(
+      .pet-card,
+      .footer-friend,
+      .cc-mascot-pat,
+      .cc-balloon-top,
+      .ch-pets button,
+      .cs-nap
+    ) {
+    cursor: var(--cc-cursor-heart, pointer);
+  }
+  html.pawpal-store
+    :is(
+      .pet-card,
+      .footer-friend,
+      .cc-mascot-pat,
+      .cc-balloon-top,
+      .ch-pets button,
+      .cs-nap
+    ):active {
+    cursor: var(--cc-cursor-heart-down, pointer);
+  }
+}
+@media (forced-colors: active) {
+  html.pawpal-store
+    :is(
+      .pet-card,
+      .footer-friend,
+      .cc-mascot-pat,
+      .cc-balloon-top,
+      .ch-pets button,
+      .cs-nap
+    ) {
+    cursor: pointer;
+  }
+}
+
+/* ---------- mascot ---------- */
+
+.cc-mascot {
+  position: fixed;
+  left: max(20px, env(safe-area-inset-left));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  width: 72px;
+  z-index: 50;
+  transition: transform 0.35s cubic-bezier(0.2, 0.75, 0.3, 1);
+}
+.cc-mascot.is-hold {
+  visibility: hidden;
+}
+.cc-mascot.is-arriving {
+  animation: cc-mascot-in 0.62s cubic-bezier(0.2, 0.8, 0.2, 1.4) both;
+}
+@keyframes cc-mascot-in {
+  from {
+    transform: translateY(110%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.cc-mascot.is-tucked {
+  transform: translateY(62%);
+}
+.cc-mascot-pat {
+  position: relative;
+  display: block;
+  width: 72px;
+  height: 86px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  cursor: var(--cc-cursor-heart, pointer);
+}
+.cc-mascot.is-idle .cc-mascot-pat {
+  animation: cc-bob 3.2s ease-in-out infinite alternate;
+}
+@keyframes cc-bob {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: 0 -5px;
+  }
+}
+.cc-mascot-pat:focus-visible {
+  outline: 3px solid #6542a0;
+  outline-offset: 3px;
+  border-radius: 38px;
+}
+.cc-mascot-arch {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 72px;
+  height: 44px;
+  border-radius: 36px 36px 10px 10px;
+  background: #efe6fa;
+  box-shadow: 0 4px 0 #d3bee2;
+}
+.cc-mascot-pat .cc-face {
+  position: absolute;
+  left: 4px;
+  bottom: 22px;
+  z-index: 1;
+  width: 64px;
+  height: 64px;
+}
+.cc-mascot-ribbon {
+  position: absolute;
+  right: 0;
+  top: 2px;
+  z-index: 3;
+  width: 22px;
+  height: 14px;
+  background:
+    radial-gradient(circle at 50% 50%, #f5db72 0 3px, #0000 3.2px),
+    radial-gradient(circle at 50% 50%, #30233f 0 4.4px, #0000 4.6px);
+}
+.cc-mascot-ribbon::before,
+.cc-mascot-ribbon::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  width: 9px;
+  height: 12px;
+  box-sizing: border-box;
+  background: #f8e98e;
+  border: 1.5px solid #30233f;
+}
+.cc-mascot-ribbon::before {
+  left: 0;
+  border-radius: 70% 25% 70% 25%;
+}
+.cc-mascot-ribbon::after {
+  right: 0;
+  border-radius: 25% 70% 25% 70%;
+}
+.cc-mascot-hide {
+  position: absolute;
+  top: 16px;
+  right: -6px;
+  z-index: 5;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: #30233f;
+  color: #fffdf9;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.cc-mascot-hide:focus-visible {
+  outline: 3px solid #6542a0;
+  outline-offset: 2px;
+  opacity: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .cc-mascot-hide {
+    opacity: 0;
+  }
+  .cc-mascot:hover .cc-mascot-hide,
+  .cc-mascot:focus-within .cc-mascot-hide {
+    opacity: 1;
+  }
+}
+@media (pointer: coarse) {
+  .cc-mascot-hide {
+    opacity: 0.8;
+  }
+}
+.cc-mascot-bubble {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  margin-bottom: 10px;
+  max-width: 180px;
+  z-index: 4;
+  text-align: left;
+}
+.cc-mascot-zz {
+  position: absolute;
+  right: -12px;
+  top: -6px;
+  z-index: 4;
+}
+body:has(.modal-shade) .cc-mascot {
+  visibility: hidden;
+}
+
+/* ---------- secret eggs ---------- */
+
+.cc-egg {
+  position: fixed;
+  left: max(20px, env(safe-area-inset-left));
+  bottom: calc(max(20px, env(safe-area-inset-bottom)) + 96px);
+  width: 120px;
+  z-index: 88;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.cc-egg .cc-bubble {
+  white-space: normal;
+  max-width: 160px;
+}
+.cc-egg .cc-face {
+  width: 96px;
+  height: 96px;
+}
+.cc-parade-static {
+  position: fixed;
+  left: max(20px, env(safe-area-inset-left));
+  bottom: calc(max(20px, env(safe-area-inset-bottom)) + 96px);
+  z-index: 88;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: #fffdf9;
+  box-shadow: 0 4px 0 #d3bee2;
+}
+.cc-parade-static-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.cc-parade-static b {
+  font: 700 12px/1.3 "Noto Sans Thai", sans-serif;
+  color: #30233f;
+}
+
+/* ---------- parade ---------- */
+
+.cc-parade {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(max(24px, env(safe-area-inset-bottom)) + 78px);
+  height: 96px;
+  z-index: 85;
+  overflow: hidden;
+  pointer-events: none;
+}
+.cc-parade-train {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 0 12px 4px;
+  will-change: transform;
+}
+.cc-parade-bunting {
+  position: absolute;
+  left: 8px;
+  top: 0;
+  display: block;
+}
+.cc-marcher {
+  display: block;
+  animation: cc-march 0.36s ease-in-out infinite alternate;
+}
+@keyframes cc-march {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: 0 -7px;
+  }
+}
+.cc-parade .cc-bubble {
+  align-self: center;
+  margin-bottom: 10px;
+}
+body:has(.modal-shade) .cc-parade {
+  visibility: hidden;
+}
+
+/* ---------- edge peeks ---------- */
+
+.cc-peek {
+  position: fixed;
+  top: clamp(120px, 44vh, calc(100dvh - 240px));
+  width: 96px;
+  z-index: 45;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  will-change: transform;
+}
+.cc-peek-left {
+  left: 0;
+}
+.cc-peek-right {
+  right: 0;
+}
+.cc-peek .cc-face {
+  width: 96px;
+  height: 96px;
+}
+.cc-peek .cc-peek-face {
+  animation: cc-peek-tilt 0.6s ease-in-out both;
+}
+@keyframes cc-peek-tilt {
+  0%,
+  100% {
+    rotate: 0deg;
+  }
+  32% {
+    rotate: 8deg;
+  }
+  68% {
+    rotate: -8deg;
+  }
+}
+.cc-peek .cc-bubble {
+  position: absolute;
+  top: 2px;
+  white-space: normal;
+  width: max-content;
+  max-width: 180px;
+}
+.cc-peek-left .cc-bubble {
+  left: 94px;
+}
+.cc-peek-right .cc-bubble {
+  right: 94px;
+  border-radius: 16px 16px 5px 16px;
+}
+.cc-peek-paws {
+  display: flex;
+  gap: 34px;
+  margin-top: -12px;
+}
+.cc-peek-paw {
+  display: block;
+  width: 16px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.6px solid #30233f;
+  background: var(--cc-peek-fur, #e4a157);
+}
+
+/* ---------- paw-print dividers ---------- */
+
+html.pawpal-store .pet-section,
+html.pawpal-store .shop-section {
+  position: relative;
+}
+.cc-steps {
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  width: min(560px, 78%);
+  height: 46px;
+  pointer-events: none;
+  color: #9873b6;
+}
+.cc-steps-top {
+  top: 34px;
+}
+.cc-steps-bottom {
+  bottom: 30px;
+}
+.cc-step {
+  position: absolute;
+  left: var(--sx);
+  top: var(--sy);
+  width: 20px;
+  height: 20px;
+  rotate: var(--sr);
+  opacity: 0.3;
+}
+.cc-step svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.cc-steps.is-armed .cc-step {
+  opacity: 0;
+  scale: 0.6;
+}
+.cc-steps.is-walking .cc-step {
+  animation: cc-step-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1.4)
+    calc(var(--i) * 150ms) forwards;
+}
+@keyframes cc-step-in {
+  from {
+    opacity: 0;
+    scale: 0.6;
+  }
+  to {
+    opacity: 0.38;
+    scale: 1;
+  }
+}
+.cc-step-end {
+  position: absolute;
+  left: 96%;
+  top: 42%;
+  translate: -50% -50%;
+  display: block;
+}
+.cc-steps.is-walking .cc-step-end {
+  animation: cc-treat-wiggle 5s ease-in-out 0.95s infinite;
+}
+@keyframes cc-treat-wiggle {
+  0%,
+  80%,
+  100% {
+    rotate: 0deg;
+    translate: -50% -50%;
+  }
+  86% {
+    rotate: -12deg;
+    translate: -50% calc(-50% - 4px);
+  }
+  93% {
+    rotate: 10deg;
+    translate: -50% calc(-50% - 2px);
+  }
+}
+
+/* ---------- footer charms ---------- */
+
+.cc-balloon-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 6px;
+  border: 1px solid #c5a4df55;
+  border-radius: 20px;
+  background: none;
+  color: #f9f5fe;
+  font-size: 13px;
+  min-height: 36px;
+  cursor: var(--cc-cursor-heart, pointer);
+  transition:
+    transform 0.22s cubic-bezier(0.2, 0.9, 0.4, 1.3),
+    background 0.22s,
+    border-color 0.22s;
+}
+.cc-balloon-top:hover {
+  transform: translateY(-3px);
+  background: #ffffff0f;
+  border-color: #c5a4df99;
+}
+.cc-balloon-top:active {
+  transform: translateY(3px) scale(0.97);
+}
+.cc-balloon-top.is-flying {
+  visibility: hidden;
+}
+.cc-balloon-top.is-back .cc-balloons {
+  animation:
+    cc-balloon-back 0.42s cubic-bezier(0.2, 0.8, 0.2, 1.4) both,
+    cc-balloon-bob 3.6s ease-in-out 0.42s infinite alternate;
+}
+@keyframes cc-balloon-back {
+  from {
+    scale: 0.5;
+    opacity: 0;
+  }
+  to {
+    scale: 1;
+    opacity: 1;
+  }
+}
+.cc-balloons {
+  display: block;
+  width: 24px;
+  height: 31px;
+  animation: cc-balloon-bob 3.6s ease-in-out infinite alternate;
+}
+.cc-balloons svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+@keyframes cc-balloon-bob {
+  from {
+    translate: 0 0;
+    rotate: -3deg;
+  }
+  to {
+    translate: 0 -4px;
+    rotate: 3deg;
+  }
+}
+.cc-balloon-flight {
+  position: fixed;
+  z-index: 88;
+  pointer-events: none;
+  display: block;
+  width: 34px;
+  height: 44px;
+  will-change: transform;
+}
+.cc-balloon-flight svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.cc-motion-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 13px;
+  min-height: 36px;
+  cursor: pointer;
+}
+.cc-motion-toggle:hover {
+  color: #fae990;
+}
+.cc-motion-toggle[aria-pressed="false"] {
+  color: #f8e98e;
+}
+.cc-psst {
+  color: #c5a4df;
+  font-size: 12px;
+}
+@media (max-width: 900px) {
+  .cc-psst {
+    display: none;
+  }
+}
+@media (hover: none) {
+  .cc-psst {
+    display: none;
+  }
+}
+
+/* ---------- small screens ---------- */
+
+@media (max-width: 700px) {
+  .cc-mascot {
+    width: 56px;
+    left: max(12px, env(safe-area-inset-left));
+    bottom: max(12px, env(safe-area-inset-bottom));
+  }
+  .cc-mascot-pat {
+    width: 56px;
+    height: 68px;
+  }
+  .cc-mascot-arch {
+    width: 56px;
+    height: 34px;
+    border-radius: 28px 28px 8px 8px;
+  }
+  .cc-mascot-pat .cc-face {
+    left: 3px;
+    bottom: 18px;
+    width: 50px;
+    height: 50px;
+  }
+  .cc-mascot-hide {
+    top: 10px;
+    right: -8px;
+  }
+  .cc-mascot-bubble {
+    white-space: normal;
+    max-width: 150px;
+  }
+  body:has(.chat-dock.is-open) .cc-mascot {
+    visibility: hidden;
+  }
+}
+@media (max-width: 640px) {
+  .cc-egg,
+  .cc-parade-static {
+    left: max(12px, env(safe-area-inset-left));
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 84px);
+  }
+  .cc-egg .cc-face {
+    width: 76px;
+    height: 76px;
+  }
+  .cc-parade {
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 150px);
+    height: 72px;
+  }
+  .cc-parade .cc-marcher svg {
+    width: 46px;
+    height: 29.9px;
+  }
+  .cc-peek {
+    width: 64px;
+  }
+  .cc-peek .cc-face {
+    width: 64px;
+    height: 64px;
+  }
+  .cc-peek-left .cc-bubble {
+    left: 62px;
+  }
+  .cc-peek-right .cc-bubble {
+    right: 62px;
+  }
+  .cc-peek .cc-bubble {
+    max-width: 150px;
+  }
+  .cc-peek-paws {
+    gap: 22px;
+  }
+  .cc-steps {
+    height: 30px;
+    width: 86%;
+  }
+  .cc-steps-top {
+    top: 18px;
+  }
+  .cc-steps-bottom {
+    bottom: 14px;
+  }
+  .cc-step {
+    width: 16px;
+    height: 16px;
+  }
+}
+@media (max-width: 359px) {
+  .cc-mascot {
+    display: none;
+  }
+}
+
+/* ---------- motion gates ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-bubble.is-pop,
+  .cc-zz i,
+  .cc-anim-blink *,
+  .cc-anim-ears *,
+  .cc-running *,
+  .cc-mascot,
+  .cc-mascot *,
+  .cc-steps,
+  .cc-steps *,
+  .cc-balloons,
+  .cc-balloon-top,
+  .cc-peek,
+  .cc-peek *,
+  .cc-parade,
+  .cc-parade * {
+    animation: none;
+    transition: none;
+  }
+  .cc-zz i {
+    opacity: 1;
+    translate: 0 0;
+  }
+  .cc-steps .cc-step,
+  .cc-steps.is-armed .cc-step,
+  .cc-steps.is-walking .cc-step {
+    opacity: 0.32;
+    scale: 1;
+  }
+  .cc-mascot.is-hold {
+    visibility: visible;
+  }
+}
+
+html[data-pawpal-motion="off"] .cc-zz i,
+html[data-pawpal-motion="off"] .cc-anim-blink .cc-face-eyes,
+html[data-pawpal-motion="off"] .cc-anim-ears .cc-face-ear,
+html[data-pawpal-motion="off"] .cc-running .cc-leg-a,
+html[data-pawpal-motion="off"] .cc-running .cc-leg-b,
+html[data-pawpal-motion="off"] .cc-running .cc-tail,
+html[data-pawpal-motion="off"] .cc-mascot.is-idle .cc-mascot-pat,
+html[data-pawpal-motion="off"] .cc-marcher,
+html[data-pawpal-motion="off"] .cc-balloons,
+html[data-pawpal-motion="off"] .cc-steps.is-walking .cc-step-end {
+  animation-play-state: paused;
+}
+html[data-pawpal-motion="off"] .cc-zz i {
+  opacity: 1;
+}
+html[data-pawpal-motion="off"] .cc-mascot {
+  transition: none;
+}
+html[data-pawpal-motion="off"] .cc-bubble.is-pop,
+html[data-pawpal-motion="off"] .cc-mascot.is-arriving,
+html[data-pawpal-motion="off"] .cc-peek .cc-peek-face,
+html[data-pawpal-motion="off"] .cc-balloon-top.is-back .cc-balloons {
+  animation: none;
+}
+html[data-pawpal-motion="off"] .cc-mascot.is-hold {
+  visibility: visible;
+}
+html[data-pawpal-motion="off"] .cc-steps .cc-step {
+  animation: none;
+  opacity: 0.32;
+  scale: 1;
+}

@@ -3,6 +3,10 @@ import "./globals.css";
 import "./redesign.css";
 import "./product-detail.css";
 import "./community.css";
+import "./cute/core.css";
+import "./cute/hero.css";
+import "./cute/shop.css";
+import "./cute/flow.css";
 
 export const metadata: Metadata = {
   title: "PAWPAL — ทุกความสุขของเพื่อนตัวเล็ก",

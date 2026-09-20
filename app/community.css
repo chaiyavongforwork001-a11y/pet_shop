@@ -106,9 +106,6 @@
 .quantity button:hover svg {
   transform: scale(1.2);
 }
-.save-button.saved svg {
-  animation: favorite-pop 0.4s cubic-bezier(0.2, 0.8, 0.2, 1.4);
-}
 .service-strip > div > svg {
   padding: 11px;
   box-sizing: content-box;

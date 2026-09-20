@@ -1,5 +1,11 @@
 "use client";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import {
   PawPrint,
   Heart,
@@ -28,6 +34,10 @@ import {
   productImages,
 } from "../lib/catalog";
 import { Modal, ProductArt } from "./ui";
+import { SwipeHint } from "./cute/flow-pdp";
+import { PawLoader } from "./cute/flow-loader";
+import { TreatIcon } from "./cute/core-faces";
+import { burst } from "./cute/core-fx";
 
 type Props = {
   product: Product;
@@ -66,10 +76,13 @@ export default function ProductDetail({
     [notice, setNotice] = useState(""),
     [manualCopy, setManualCopy] = useState(false),
     [failed, setFailed] = useState<string[]>([]),
+    [hint, setHint] = useState(false),
     [nativeShare, setNativeShare] = useState(false);
   const imageIndex = Math.min(active, images.length - 1),
     currentImage = images[imageIndex];
   const gesture = useRef({ x: 0, y: 0, swiped: false });
+  const copyButton = useRef<HTMLButtonElement>(null);
+  const hideHint = useCallback(() => setHint(false), []);
   const related = products
     .filter((i) => i.active && i.stock > 0 && i.id !== p.id)
     .sort(
@@ -86,6 +99,21 @@ export default function ProductDetail({
     setLink(url.href);
     setNativeShare(typeof navigator.share === "function");
   }, [p.id]);
+  useEffect(() => {
+    if (images.length < 2 || !matchMedia("(pointer: coarse)").matches) return;
+    let shown = false;
+    try {
+      shown = !!sessionStorage.getItem("pawpal-swipe-hint");
+    } catch {}
+    if (shown) return;
+    const t = setTimeout(() => {
+      setHint(true);
+      try {
+        sessionStorage.setItem("pawpal-swipe-hint", "1");
+      } catch {}
+    }, 600);
+    return () => clearTimeout(t);
+  }, [images.length]);
   const changeImage = (index: number) => {
     setActive((index + images.length) % images.length);
     setZoom(false);
@@ -95,6 +123,16 @@ export default function ProductDetail({
       await navigator.clipboard.writeText(link);
       setNotice("คัดลอกลิงก์ให้เพื่อนแล้ว ♡");
       setManualCopy(false);
+      const box = copyButton.current?.getBoundingClientRect();
+      if (box)
+        burst({
+          x: box.left + box.width / 2,
+          y: box.top + box.height / 2,
+          kinds: ["paw", "heart"],
+          count: 6,
+          spread: 120,
+          size: 14,
+        });
     } catch {
       setManualCopy(true);
       setNotice("เลือกลิงก์ด้านล่างเพื่อคัดลอก");
@@ -152,6 +190,7 @@ export default function ProductDetail({
                   dy = e.clientY - gesture.current.y;
                 if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
                   gesture.current.swiped = true;
+                  setHint(false);
                   changeImage(active + (dx < 0 ? 1 : -1));
                 }
               }}
@@ -199,6 +238,7 @@ export default function ProductDetail({
                 </button>
               </>
             )}
+            {hint && <SwipeHint onDone={hideHint} />}
           </div>
           <div className="gallery-thumbs" aria-label="เลือกรูปสินค้า">
             {images.map((src, i) => (
@@ -244,7 +284,11 @@ export default function ProductDetail({
             >
               𝕏
             </a>
-            <button aria-label="คัดลอกลิงก์สินค้า" onClick={copyLink}>
+            <button
+              ref={copyButton}
+              aria-label="คัดลอกลิงก์สินค้า"
+              onClick={copyLink}
+            >
               <Copy size={17} />
             </button>
             {nativeShare && (
@@ -524,6 +568,7 @@ function ProductReviews({ productId }: { productId: string }) {
     [nickname, setNickname] = useState(""),
     [comment, setComment] = useState(""),
     [success, setSuccess] = useState("");
+  const submitButton = useRef<HTMLButtonElement>(null);
   async function load(signal?: AbortSignal) {
     const r = await fetch(
       `/api/products/${encodeURIComponent(productId)}/reviews`,
@@ -562,6 +607,14 @@ function ProductReviews({ productId }: { productId: string }) {
       if (!r.ok) throw Error(d.error);
       await load();
       setSuccess("ขอบคุณที่แบ่งปันเรื่องของเพื่อนซี้ ♡");
+      const box = submitButton.current?.getBoundingClientRect();
+      if (box)
+        burst({
+          x: box.left + box.width / 2,
+          y: box.top + box.height / 2,
+          kinds: ["heart", "star"],
+          count: 7,
+        });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -583,9 +636,11 @@ function ProductReviews({ productId }: { productId: string }) {
         <div>
           <h3>เสียงจากเพื่อน ๆ</h3>
           <p>
-            {data
-              ? `${data.summary.count} รีวิวจากคำสั่งซื้อที่จัดส่งแล้ว`
-              : "กำลังโหลดรีวิว…"}
+            {data ? (
+              `${data.summary.count} รีวิวจากคำสั่งซื้อที่จัดส่งแล้ว`
+            ) : (
+              <PawLoader size="sm" label="กำลังโหลดรีวิว…" />
+            )}
             {data?.demo ? " · โหมดทดลอง" : ""}
           </p>
         </div>
@@ -648,8 +703,16 @@ function ProductReviews({ productId }: { productId: string }) {
               placeholder="เล่าประสบการณ์ใช้งานของเพื่อนตัวเล็ก…"
             />
           </label>
-          <button className="primary-button" disabled={busy}>
-            <PawPrint size={18} />
+          <button ref={submitButton} className="primary-button" disabled={busy}>
+            {busy ? (
+              <span className="cf-walk-paws" aria-hidden="true">
+                <TreatIcon kind="paw" size={13} />
+                <TreatIcon kind="paw" size={13} />
+                <TreatIcon kind="paw" size={13} />
+              </span>
+            ) : (
+              <PawPrint size={18} />
+            )}
             {busy ? "กำลังบันทึก…" : "แบ่งปันรีวิว"}
           </button>
         </form>
