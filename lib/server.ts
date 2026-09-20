@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers";
+import { env } from "./runtime-env";
 import { getChatGPTUser } from "../app/chatgpt-auth";
 import { defaultSettings, seedProducts, type ShopSettings } from "./catalog";
 export class HttpError extends Error {
