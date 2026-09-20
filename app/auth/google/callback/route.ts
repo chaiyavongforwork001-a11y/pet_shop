@@ -13,6 +13,7 @@ import {
   identityFromIdToken,
   redirectResponse,
   redirectUri,
+  safeReturnPath,
 } from "../../../../lib/auth";
 import {
   OAUTH_COOKIE,
@@ -20,6 +21,7 @@ import {
   SESSION_TTL_SECONDS,
   clearCookieHeader,
   cookieHeader,
+  cookieName,
   sameState,
   sessionSecret,
   signSession,
@@ -30,9 +32,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request): Promise<Response> {
   const parameters = new URL(request.url).searchParams;
-  const handshakeToken = (await cookies()).get(OAUTH_COOKIE)?.value;
+  const handshakeToken = (await cookies()).get(cookieName(OAUTH_COOKIE))?.value;
   // The handshake is single-use whatever happens next.
-  const drop = clearCookieHeader(OAUTH_COOKIE);
+  const drop = clearCookieHeader(cookieName(OAUTH_COOKIE));
 
   const secret = sessionSecret();
   const google = googleConfig();
@@ -44,9 +46,12 @@ export async function GET(request: Request): Promise<Response> {
     );
 
   if (parameters.get("error"))
-    return authError(400, "การลงชื่อเข้าใช้ถูกยกเลิก กรุณาลองใหม่อีกครั้ง", [
-      drop,
-    ]);
+    return authError(
+      400,
+      "การลงชื่อเข้าใช้ถูกยกเลิก กรุณาลองใหม่อีกครั้ง",
+      [drop],
+      "/",
+    );
 
   const handshake = await verifyOAuthState(handshakeToken, secret);
   const state = parameters.get("state") || "";
@@ -56,6 +61,7 @@ export async function GET(request: Request): Promise<Response> {
       400,
       "คำขอลงชื่อเข้าใช้ไม่ถูกต้องหรือหมดอายุแล้ว กรุณาลองใหม่อีกครั้ง",
       [drop],
+      "/",
     );
 
   let exchanged: { id_token?: unknown };
@@ -83,6 +89,7 @@ export async function GET(request: Request): Promise<Response> {
       502,
       "ติดต่อ Google ไม่สำเร็จ กรุณาลองลงชื่อเข้าใช้อีกครั้ง",
       [drop],
+      "/",
     );
   }
 
@@ -95,11 +102,18 @@ export async function GET(request: Request): Promise<Response> {
       403,
       "ใช้บัญชี Google นี้ไม่ได้ กรุณาลงชื่อเข้าใช้ด้วยบัญชีที่ยืนยันอีเมลแล้ว",
       [drop],
+      "/",
     );
 
   const session = await signSession(identity, secret);
-  return redirectResponse(handshake.returnTo, [
+  // safeReturnPath again, on the way out. The handshake is this server's own
+  // sealed cookie, so this is not distrust of the cookie — it is refusing to
+  // have exactly one unchecked path to a Location header. A destination that
+  // was poisoned when the handshake was minted, or by a future change to how
+  // return_to is captured, dies here rather than sending a visitor who just
+  // finished a genuine Google sign-in off to somebody else's site.
+  return redirectResponse(safeReturnPath(handshake.returnTo), [
     drop,
-    cookieHeader(SESSION_COOKIE, session, SESSION_TTL_SECONDS),
+    cookieHeader(cookieName(SESSION_COOKIE), session, SESSION_TTL_SECONDS),
   ]);
 }

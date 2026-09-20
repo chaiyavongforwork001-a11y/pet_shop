@@ -47,6 +47,19 @@ async function get(path, headers = {}) {
   return { status: response.status, json, response };
 }
 
+/**
+ * Session cookies on a response, under either spelling.
+ *
+ * A production build host-locks the cookie as `__Host-pawpal_session`, so a
+ * check that only looked for `pawpal_session=` would pass by looking for
+ * something that is never there — the worst way for a security check to pass.
+ */
+function sessionCookies(response) {
+  return (response.headers.getSetCookie?.() ?? []).filter((c) =>
+    /^(__Host-)?pawpal_session=/.test(c),
+  );
+}
+
 if (mode === "no-admin") {
   const { devSession } = await import("./dev-session.mjs");
   const anybody = await devSession(base, {
@@ -94,9 +107,7 @@ if (mode === "production") {
       `production build: GET ${path} -> 404 (got ${result.status})`,
     );
     check(
-      !(result.response.headers.getSetCookie?.() ?? []).some((c) =>
-        c.startsWith("pawpal_session="),
-      ),
+      sessionCookies(result.response).length === 0,
       `production build: GET ${path} sets no session cookie`,
     );
   }
@@ -108,9 +119,7 @@ if (mode === "production") {
   });
   check(posted.status === 404, "production build: POST /auth/dev -> 404");
   check(
-    !(posted.headers.getSetCookie?.() ?? []).some((c) =>
-      c.startsWith("pawpal_session="),
-    ),
+    sessionCookies(posted).length === 0,
     "production build: POST /auth/dev sets no session cookie",
   );
 
@@ -188,7 +197,7 @@ if (mode === "google") {
   check(
     !target.searchParams.has("code_verifier") &&
       !target.searchParams.has("client_secret"),
-    "the verifier and the client secret never leave the server",
+    "neither the verifier nor the client secret is in the authorization request",
   );
   check(
     (target.searchParams.get("redirect_uri") || "").endsWith(
@@ -198,19 +207,43 @@ if (mode === "google") {
   );
 
   const handshake = (start.response.headers.getSetCookie?.() ?? []).find((c) =>
-    c.startsWith("pawpal_oauth="),
+    /^(__Host-)?pawpal_oauth=/.test(c),
   );
-  check(!!handshake, "the handshake is parked in a pawpal_oauth cookie");
+  check(
+    !!handshake,
+    "the handshake is parked in a host-locked pawpal_oauth cookie",
+  );
+  check(
+    handshake.startsWith("__Host-"),
+    `a production cookie is host-locked so no sibling subdomain can write it (${handshake.split("=")[0]})`,
+  );
   check(
     handshake.includes("HttpOnly") &&
       handshake.includes("SameSite=Lax") &&
       handshake.includes("Secure"),
     `the handshake cookie is HttpOnly, Lax and Secure in production (${handshake.split(";").slice(1).join(";").trim()})`,
   );
+  // The handshake carries the PKCE verifier, and PKCE only means anything if
+  // the verifier is not readable by whatever can read the cookie jar. Signing
+  // alone left it in plain base64url; it is encrypted, so no part of the
+  // cookie decodes to the payload.
+  const opaque = handshake
+    .split(";")[0]
+    .split("=")
+    .slice(1)
+    .join("=")
+    .split(".")
+    .every((segment) => {
+      try {
+        const text = Buffer.from(segment, "base64url").toString("utf8");
+        return !text.includes("verifier") && !text.includes("returnTo");
+      } catch {
+        return true;
+      }
+    });
+  check(opaque, "the handshake cookie does not expose the PKCE verifier");
   check(
-    !(start.response.headers.getSetCookie?.() ?? []).some((c) =>
-      c.startsWith("pawpal_session="),
-    ),
+    sessionCookies(start.response).length === 0,
     "starting a sign-in does not itself sign anybody in",
   );
 
@@ -240,9 +273,7 @@ if (mode === "google") {
       `callback rejects ${what} -> 400 (got ${result.status})`,
     );
     check(
-      !(result.response.headers.getSetCookie?.() ?? []).some((c) =>
-        c.startsWith("pawpal_session="),
-      ),
+      sessionCookies(result.response).length === 0,
       `callback rejecting ${what} mints no session`,
     );
   }

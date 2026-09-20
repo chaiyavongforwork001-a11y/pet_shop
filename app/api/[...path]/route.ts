@@ -653,10 +653,29 @@ async function handle(req: Request) {
  * one is past half its life, so an active shopper never expires mid-checkout.
  * A failure here is not a failure of the request: the worst case is a session
  * that expires on its original schedule.
+ *
+ * Except on a response a cache other than this visitor's browser may keep.
+ * Product images are served `public, max-age=86400` — the one URL class every
+ * visitor loads and the app explicitly declares shareable — and a Set-Cookie
+ * riding on that response is a live credential that any CDN, proxy or edge
+ * cache honouring the directive may store and hand to the next person who
+ * loads the photo. They would be silently signed in as whoever requested it
+ * first, which for the owner's own browsing is an admin session over every
+ * order, address and payment slip in the shop.
+ *
+ * So the rule is stated the safe way round: the cookie is attached only to a
+ * response that has said for itself that it is `no-store` or `private`, rather
+ * than skipped on the ones known today to be shareable. Every JSON answer here
+ * is `no-store` and slips are `private, no-store`, so the session still slides
+ * on /api/shop, /api/orders, /api/admin and /api/chat; a route added later
+ * that forgets to say what it is loses the sliding refresh instead of leaking
+ * a session into somebody's cache.
  */
 async function withFreshSession(req: Request) {
   const response = await handle(req);
   try {
+    const cache = response.headers.get("cache-control") ?? "";
+    if (!/(^|,\s*)(no-store|private)(\s|;|,|=|$)/i.test(cache)) return response;
     const refreshed = await sessionRefreshCookie();
     if (refreshed) response.headers.append("Set-Cookie", refreshed);
   } catch (error) {

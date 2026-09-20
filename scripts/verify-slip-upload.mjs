@@ -51,6 +51,8 @@ async function api(path, { user, method = "GET", data, body, type } = {}) {
       ...headers(user),
       ...(data ? { "Content-Type": "application/json" } : {}),
       ...(type ? { "Content-Type": type } : {}),
+      // State-changing requests must say where they come from, as a browser does.
+      ...(method === "GET" ? {} : { Origin: base }),
     },
     body: body ?? (data ? JSON.stringify(data) : undefined),
   });

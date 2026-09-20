@@ -2,8 +2,10 @@
 //
 // Authorization-code flow with PKCE. The state and the code verifier are not
 // kept in server memory (there is none to keep between Netlify invocations):
-// they ride in a short-lived cookie this server signed, which the callback
-// verifies before it will exchange anything.
+// they ride in a short-lived cookie this server encrypted, which the callback
+// opens before it will exchange anything. Encrypted rather than merely signed
+// because the verifier is in there and PKCE is worth nothing once it is
+// readable — see signOAuthState in lib/session.ts.
 
 import {
   DEV_SIGN_IN_PATH,
@@ -20,6 +22,7 @@ import {
   OAUTH_TTL_SECONDS,
   codeChallenge,
   cookieHeader,
+  cookieName,
   randomToken,
   sessionSecret,
   signOAuthState,
@@ -68,6 +71,6 @@ export async function GET(request: Request): Promise<Response> {
   authorize.searchParams.set("prompt", "select_account");
 
   return redirectResponse(authorize.toString(), [
-    cookieHeader(OAUTH_COOKIE, handshake, OAUTH_TTL_SECONDS),
+    cookieHeader(cookieName(OAUTH_COOKIE), handshake, OAUTH_TTL_SECONDS),
   ]);
 }

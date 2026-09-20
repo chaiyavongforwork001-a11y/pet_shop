@@ -30,7 +30,7 @@ export async function devSession(base, user = {}) {
 
   const cookie = (response.headers.getSetCookie?.() ?? [])
     .map((value) => value.split(";")[0])
-    .find((pair) => pair.startsWith("pawpal_session="));
+    .find((pair) => /^(__Host-)?pawpal_session=/.test(pair));
   if (!cookie) throw new Error("/auth/dev set no pawpal_session cookie");
   return cookie;
 }

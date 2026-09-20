@@ -17,6 +17,8 @@ async function request(path, method = "GET", data, auth = true) {
     headers: {
       ...(auth ? { cookie } : {}),
       ...(data ? { "Content-Type": "application/json" } : {}),
+      // State-changing requests must say where they come from, as a browser does.
+      ...(method === "GET" ? {} : { Origin: base }),
     },
     body: data ? JSON.stringify(data) : undefined,
   });
@@ -147,7 +149,7 @@ try {
   form.append("file", new Blob([png], { type: "image/png" }), "qa-slip.png");
   const upload = await fetch(base + `/api/orders/${orderId}/slip`, {
     method: "POST",
-    headers: { cookie },
+    headers: { cookie, Origin: base },
     body: form,
   });
   check(upload.status === 200, "test slip stored");

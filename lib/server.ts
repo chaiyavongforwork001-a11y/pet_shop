@@ -4,6 +4,7 @@ import {
   blobStore as openBlobStore,
 } from "./runtime";
 import { getUser } from "../app/session";
+import { isSameOrigin } from "./auth";
 import { defaultSettings, seedProducts, type ShopSettings } from "./catalog";
 export class HttpError extends Error {
   constructor(
@@ -46,9 +47,19 @@ export async function requireAdmin() {
     );
   return u;
 }
+/**
+ * The CSRF gate for every state-changing API call.
+ *
+ * It used to let a request with no Origin header through, which meant the
+ * check could be skipped by simply not sending the header and the only thing
+ * left protecting a signed-in shopper was the browser's own SameSite=Lax
+ * handling of the cookie. It now fails closed: a request must say where it
+ * came from, and that has to be this site. isSameOrigin() explains which
+ * origins count as this site and why the Host header is the right thing to
+ * compare against.
+ */
 export function originCheck(req: Request) {
-  const origin = req.headers.get("origin");
-  if (origin && origin !== new URL(req.url).origin)
+  if (!isSameOrigin(req))
     throw new HttpError(403, "ไม่อนุญาตคำขอจากเว็บไซต์อื่น");
 }
 export function json(data: unknown, status = 200) {

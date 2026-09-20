@@ -11,9 +11,12 @@
 // in Next's Node runtime, in a Netlify function and in a plain `node` script —
 // no new dependency, nothing Node-specific.
 //
-// Token shape:  base64url(JSON payload) "." base64url(HMAC-SHA256)
+// Session token shape:  base64url(JSON payload) "." base64url(HMAC-SHA256)
 // The MAC covers the payload bytes *and* a purpose label, so a token minted
 // for the short-lived OAuth handshake can never be replayed as a session.
+//
+// The handshake cookie is encrypted rather than signed, because it carries the
+// PKCE verifier — see signOAuthState below.
 
 const encoder = new TextEncoder();
 
@@ -39,6 +42,27 @@ export type OAuthPayload = {
 export const SESSION_COOKIE = "pawpal_session";
 export const OAUTH_COOKIE = "pawpal_oauth";
 
+/**
+ * The name a cookie is set and read under.
+ *
+ * In production it gains the `__Host-` prefix, which a browser will only
+ * accept on a cookie that is Secure, Path=/ and has no Domain — exactly what
+ * cookieHeader() already writes. The prefix is what makes the cookie
+ * *host-locked*: without it, script running on any sibling of a shared
+ * registrable domain (a blog, a status page, a preview host under the same
+ * custom domain) can set `pawpal_session=<their own valid session>;
+ * Domain=example.com`, and the shop cannot tell that duplicate apart from the
+ * one it issued. The visitor then checks out inside the attacker's account,
+ * filing their address, phone number and payment slip where the attacker can
+ * read them. A `__Host-` cookie cannot be written from another host at all.
+ *
+ * Development keeps the bare names: `__Host-` requires Secure, and a Secure
+ * cookie is dropped on http://localhost.
+ */
+export function cookieName(base: string): string {
+  return isProduction() ? `__Host-${base}` : base;
+}
+
 /** A week is long enough to stay signed in between visits, short enough to matter. */
 export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 /** Re-issue once a session is past half its life, so active visitors never expire mid-order. */
@@ -53,7 +77,20 @@ const OAUTH_PURPOSE = "pawpal.oauth.v1";
 // The secret
 // ---------------------------------------------------------------------------
 
-let developmentSecret: string | null = null;
+/**
+ * Where the development fallback secret lives.
+ *
+ * On the global object rather than in module scope, because this module is
+ * evaluated more than once in a single `next dev` process — the server
+ * component layer and the route handler layer each get their own instance. A
+ * module-scoped secret therefore differed between them: the API accepted a
+ * cookie that /admin rejected, so a developer who left SESSION_SECRET blank
+ * signed in successfully and still saw the signed-out card, with nothing in
+ * the log to explain it. One process, one secret.
+ */
+const DEVELOPMENT_SECRET = Symbol.for("pawpal.development-session-secret");
+type SecretHolder = { [DEVELOPMENT_SECRET]?: string };
+
 let warnedAboutMissingSecret = false;
 
 export function isProduction(): boolean {
@@ -68,11 +105,11 @@ export function isProduction(): boolean {
  * start a handshake, so the shop fails closed rather than handing out sessions
  * signed with a guessable key.
  *
- * Outside production a random per-process secret is generated instead. It is
- * never written down, so restarting the dev server invalidates old cookies —
- * which is the correct trade for not shipping a hardcoded development key that
- * could be reused somewhere real. Set SESSION_SECRET in .env to keep sessions
- * across restarts.
+ * Outside production a random per-process secret is generated instead, shared
+ * by every copy of this module in the process. It is never written down, so
+ * restarting the dev server invalidates old cookies — which is the correct
+ * trade for not shipping a hardcoded development key that could be reused
+ * somewhere real. Set SESSION_SECRET in .env to keep sessions across restarts.
  */
 export function sessionSecret(): string | null {
   const configured = (process.env.SESSION_SECRET || "").trim();
@@ -88,15 +125,16 @@ export function sessionSecret(): string | null {
     return null;
   }
 
-  if (!developmentSecret) {
-    developmentSecret = base64urlEncode(
+  const holder = globalThis as SecretHolder;
+  if (!holder[DEVELOPMENT_SECRET]) {
+    holder[DEVELOPMENT_SECRET] = base64urlEncode(
       crypto.getRandomValues(new Uint8Array(32)),
     );
     console.warn(
       "PAWPAL generated a throwaway SESSION_SECRET for this development process. Sessions end when it restarts; set SESSION_SECRET in .env to keep them.",
     );
   }
-  return developmentSecret;
+  return holder[DEVELOPMENT_SECRET];
 }
 
 // ---------------------------------------------------------------------------
@@ -241,6 +279,41 @@ export function shouldRefresh(
 // The OAuth handshake cookie
 // ---------------------------------------------------------------------------
 
+/**
+ * The handshake cookie is encrypted, not merely signed.
+ *
+ * It carries the PKCE code_verifier, and PKCE's whole claim is that a stolen
+ * authorization code is useless to anyone who does not have the verifier. A
+ * signed-only cookie is readable by anything that can read the browser's
+ * cookie jar — infostealer malware, a shared machine, a profile backup, a
+ * plain-HTTP deployment where the Secure attribute is absent — which would
+ * have left that claim resting entirely on the client secret. AES-GCM keeps
+ * the payload unreadable and still authenticates it, so a tampered cookie
+ * fails to open at all.
+ *
+ * The key is derived from SESSION_SECRET, so there is nothing new to configure,
+ * and the purpose label is authenticated as additional data, so a token minted
+ * for one purpose cannot be opened as another.
+ *
+ * Token shape:  base64url(12-byte IV) "." base64url(AES-GCM ciphertext+tag)
+ */
+const aesKeyCache = new Map<string, Promise<CryptoKey>>();
+
+function aesKey(secret: string): Promise<CryptoKey> {
+  const cached = aesKeyCache.get(secret);
+  if (cached) return cached;
+  const pending = crypto.subtle
+    .digest("SHA-256", encoder.encode(`${OAUTH_PURPOSE}.key.${secret}`))
+    .then((material) =>
+      crypto.subtle.importKey("raw", material, { name: "AES-GCM" }, false, [
+        "encrypt",
+        "decrypt",
+      ]),
+    );
+  aesKeyCache.set(secret, pending);
+  return pending;
+}
+
 export async function signOAuthState(
   handshake: { state: string; verifier: string; returnTo: string },
   secret: string,
@@ -250,15 +323,43 @@ export async function signOAuthState(
     ...handshake,
     exp: Math.floor(now / 1000) + OAUTH_TTL_SECONDS,
   };
-  return sign(OAUTH_PURPOSE, payload, secret);
+  const iv = new Uint8Array(12);
+  crypto.getRandomValues(iv);
+  const sealed = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv, additionalData: encoder.encode(OAUTH_PURPOSE) },
+    await aesKey(secret),
+    encoder.encode(JSON.stringify(payload)),
+  );
+  return `${base64urlEncode(iv)}.${base64urlEncode(new Uint8Array(sealed))}`;
 }
 
 export async function verifyOAuthState(
   token: string | undefined | null,
   secret: string | null,
 ): Promise<OAuthPayload | null> {
-  const payload = await verify<OAuthPayload>(OAUTH_PURPOSE, token, secret);
-  if (!payload) return null;
+  if (!token || !secret) return null;
+  const separator = token.indexOf(".");
+  if (separator <= 0 || separator === token.length - 1) return null;
+
+  let payload: OAuthPayload;
+  try {
+    const iv = base64urlDecode(token.slice(0, separator));
+    if (iv.length !== 12) return null;
+    const opened = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv, additionalData: encoder.encode(OAUTH_PURPOSE) },
+      await aesKey(secret),
+      base64urlDecode(token.slice(separator + 1)),
+    );
+    payload = JSON.parse(new TextDecoder().decode(opened));
+  } catch {
+    // Bad base64, a tampered ciphertext, a different secret: all the same
+    // answer, which is "there is no handshake in flight".
+    return null;
+  }
+
+  if (!payload || typeof payload !== "object") return null;
+  if (typeof payload.exp !== "number" || payload.exp * 1000 <= Date.now())
+    return null;
   if (typeof payload.state !== "string" || !payload.state) return null;
   if (typeof payload.verifier !== "string" || !payload.verifier) return null;
   if (typeof payload.returnTo !== "string") return null;
@@ -287,6 +388,9 @@ export function sameState(a: string, b: string): boolean {
  *   Secure       in production only; on http://localhost a Secure cookie
  *                would simply be dropped
  *   Path=/       one session for the storefront, the API and /admin alike
+ *
+ * Those last two, plus the absence of Domain, are also what the `__Host-`
+ * prefix cookieName() adds in production requires — see there for why.
  */
 export function cookieHeader(
   name: string,
@@ -336,7 +440,7 @@ export function base64urlEncode(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-export function base64urlDecode(value: string): Uint8Array {
+export function base64urlDecode(value: string): Uint8Array<ArrayBuffer> {
   if (!/^[A-Za-z0-9_-]*$/.test(value)) throw new Error("not base64url");
   const padded = value
     .replace(/-/g, "+")

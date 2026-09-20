@@ -22,7 +22,10 @@ async function request(
     headers: {
       ...(auth ? { cookie } : {}),
       ...(data ? { "Content-Type": "application/json" } : {}),
-      ...(origin ? { Origin: origin } : {}),
+      // A browser always states its origin on a state-changing request and the
+      // server now insists on it, so the script states one too. Pass `origin`
+      // explicitly to play somebody else's site.
+      ...(method === "GET" ? {} : { Origin: origin || base }),
     },
     body: form || (data ? JSON.stringify(data) : undefined),
   });

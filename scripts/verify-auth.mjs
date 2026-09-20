@@ -30,10 +30,22 @@ const adminEmail = (process.env.ADMIN_EMAIL || "dev@pawpal.test")
   .trim();
 
 let checks = 0;
+let skipped = 0;
 function check(value, message) {
   assert.ok(value, message);
   checks += 1;
   console.log("PASS", message);
+}
+/**
+ * A check that could not be run, counted so the summary cannot be mistaken for
+ * a full pass. A run that skips anything now exits non-zero: "52 identity
+ * checks passed" with exit code 0 reads as green in CI even though five of the
+ * documented checks never executed — including the one that proves a cookie
+ * signed with a different secret is refused.
+ */
+function skip(count, message) {
+  skipped += count;
+  console.log(`SKIP ${message} (${count} checks not run)`);
 }
 
 async function api(path, { cookie, method = "GET", data, headers = {} } = {}) {
@@ -43,6 +55,9 @@ async function api(path, { cookie, method = "GET", data, headers = {} } = {}) {
     headers: {
       ...(cookie ? { cookie } : {}),
       ...(data ? { "Content-Type": "application/json" } : {}),
+      // A browser states its origin on every state-changing request, and the
+      // server now refuses one that does not; pass `headers.Origin` to lie.
+      ...(method === "GET" ? {} : { Origin: base }),
       ...headers,
     },
     body: data ? JSON.stringify(data) : undefined,
@@ -229,6 +244,7 @@ const uploaded = await fetch(`${base}/api/orders/${orderId}/slip`, {
   method: "POST",
   headers: {
     cookie: customer,
+    Origin: base,
     "Content-Type": `multipart/form-data; boundary=${boundary}`,
   },
   body: slipBody,
@@ -311,7 +327,7 @@ check(
 
 const secret = process.env.SESSION_SECRET;
 if (!secret) {
-  console.log("SKIP sliding refresh (SESSION_SECRET not passed to the script)");
+  skip(9, "sliding refresh and cacheability: pass the server's SESSION_SECRET to this script");
 } else {
   const { createHmac } = await import("node:crypto");
   const mint = (payload) => {
@@ -376,6 +392,61 @@ if (!secret) {
       .status === 401,
     "a cookie signed with a different secret is rejected -> 401",
   );
+
+  // -------------------------------------------------------------------------
+  // A credential must never ride a response a shared cache may keep.
+  //
+  // Product images are the one URL class every visitor loads and the only one
+  // the app declares `public, max-age=86400`. When the sliding refresh was
+  // appended to every API response, a shopper whose session was past half its
+  // life got a fresh seven-day cookie attached to exactly that response — so
+  // any CDN or proxy honouring the directive could store it and hand it to the
+  // next visitor who loaded the photo, signing them in as somebody else. The
+  // session must still slide on the no-store responses, or this check passes
+  // for the wrong reason, so both halves are asserted.
+  const agingAdmin = mint({
+    sub: "verify-auth-cache-probe",
+    email: adminEmail,
+    name: null,
+    iat: now - 5 * 24 * 60 * 60,
+    exp: now + 2 * 24 * 60 * 60,
+  });
+  const png = Buffer.from(
+    "89504e470d0a1a0a0000000d494844520000000100000001080600000" +
+      "01f15c4890000000a49444154789c6360000002000100ffff030000060" +
+      "0055dc5b3860000000049454e44ae426082",
+    "hex",
+  );
+  const form = new FormData();
+  form.append("file", new Blob([png], { type: "image/png" }), "cache.png");
+  const uploaded = await fetch(`${base}/api/admin/upload`, {
+    method: "POST",
+    headers: { cookie: agingAdmin, Origin: base },
+    body: form,
+  });
+  const uploadedUrl = (await uploaded.json())?.url;
+  check(
+    uploaded.status === 200 && typeof uploadedUrl === "string",
+    `the admin uploads a product image to probe the cache rule (${uploaded.status} ${uploadedUrl})`,
+  );
+  const image = await fetch(base + uploadedUrl, {
+    headers: { cookie: agingAdmin },
+  });
+  check(
+    image.headers.get("cache-control") === "public, max-age=86400",
+    "the product image is still publicly cacheable",
+  );
+  check(
+    (image.headers.getSetCookie?.() ?? []).length === 0,
+    `a publicly cacheable response carries no Set-Cookie, not even for a session due for re-issue (${image.headers.getSetCookie?.() ?? []})`,
+  );
+  const slid = await api("/api/orders", { cookie: agingAdmin });
+  check(
+    (slid.response.headers.getSetCookie?.() ?? []).some((c) =>
+      c.startsWith("pawpal_session="),
+    ),
+    "the same session is re-issued on a no-store response, so the check above is not vacuous",
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -397,6 +468,14 @@ check(
 for (const hostile of [
   "https://evil.test/steal",
   "//evil.test/steal",
+  // Dot segments rebuild the authority *after* the leading-slash check:
+  // "/..//evil.test/steal" normalises to the pathname "//evil.test/steal",
+  // which a browser resolves against the current scheme. The guard has to
+  // be applied to the normalised path, so these belong in this list.
+  "/..//evil.test/steal",
+  "/..///evil.test",
+  "/.%2E//evil.test",
+  "/orders/../..//evil.test/steal",
   "/\\evil.test/steal",
   "/\t/evil.test/steal",
   "/\n/evil.test/steal",
@@ -415,6 +494,11 @@ for (const hostile of [
     !where.startsWith("//") && !/^[a-z]+:/i.test(where),
     `sign-out return_to ${JSON.stringify(hostile)} is not an open redirect`,
   );
+  // Whatever the string looks like, what matters is where a browser ends up.
+  check(
+    new URL(where, "https://pawpal.example").origin === "https://pawpal.example",
+    `sign-out return_to ${JSON.stringify(hostile)} resolves to this site, not ${new URL(where, "https://pawpal.example").origin}`,
+  );
 }
 check(
   (await api("/signin?return_to=//evil.test/steal")).response.headers
@@ -429,4 +513,75 @@ check(
   "an ordinary relative return_to is carried through intact",
 );
 
+// ---------------------------------------------------------------------------
+// 8. Requests that no browser on this site would make
+// ---------------------------------------------------------------------------
+//
+// Cookies are sent by the browser, so a signed-in visitor's credentials are
+// attached to requests they never meant to make. The server has to decide from
+// the request itself, and the two signals it has are the stated origin and
+// what the browser says it is loading.
+
+check(
+  (
+    await api("/api/chat", {
+      cookie: customer,
+      method: "POST",
+      data: { text: "csrf probe" },
+      headers: { Origin: "https://evil.test" },
+    })
+  ).status === 403,
+  "a state-changing request from another origin -> 403",
+);
+const anonymous = await fetch(`${base}/api/chat`, {
+  method: "POST",
+  redirect: "manual",
+  headers: { cookie: customer, "Content-Type": "application/json" },
+  body: JSON.stringify({ text: "no-origin probe" }),
+});
+check(
+  anonymous.status === 403,
+  `a state-changing request that states no origin at all -> 403 (got ${anonymous.status})`,
+);
+check(
+  (
+    await api("/api/chat", {
+      cookie: customer,
+      method: "POST",
+      data: { text: "same-origin probe" },
+    })
+  ).status === 201,
+  "the shop's own origin is still allowed to write -> 201",
+);
+
+for (const [path, what] of [
+  ["/signout?return_to=/", "signing out"],
+  ["/auth/dev?email=someone@pawpal.test", "signing in as the dev provider"],
+]) {
+  const subresource = await fetch(base + path, {
+    redirect: "manual",
+    headers: {
+      cookie: customer,
+      "Sec-Fetch-Dest": "image",
+      "Sec-Fetch-Mode": "no-cors",
+      "Sec-Fetch-Site": "cross-site",
+    },
+  });
+  check(
+    subresource.status === 403,
+    `${what} from another page's <img> -> 403 (got ${subresource.status})`,
+  );
+  check(
+    (subresource.headers.getSetCookie?.() ?? []).length === 0,
+    `${what} from another page's <img> touches no cookie`,
+  );
+}
+
+if (skipped) {
+  console.error(
+    `\n${checks} identity checks passed against ${base}, but ${skipped} were SKIPPED.` +
+      "\nRun this with the same SESSION_SECRET the server has, so every check executes.",
+  );
+  process.exit(1);
+}
 console.log(`\n${checks} identity checks passed against ${base}`);

@@ -16,6 +16,7 @@ import {
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
   cookieHeader,
+  cookieName,
   sessionSecret,
   shouldRefresh,
   signSession,
@@ -40,7 +41,7 @@ export type ShopUser = {
  * make this return a user the server did not sign.
  */
 export async function getUser(): Promise<ShopUser | null> {
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  const token = (await cookies()).get(cookieName(SESSION_COOKIE))?.value;
   const payload = await verifySession(token, sessionSecret());
   if (!payload) return null;
   return {
@@ -62,12 +63,12 @@ export async function getUser(): Promise<ShopUser | null> {
 export async function sessionRefreshCookie(): Promise<string | null> {
   const secret = sessionSecret();
   if (!secret) return null;
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  const token = (await cookies()).get(cookieName(SESSION_COOKIE))?.value;
   const payload = await verifySession(token, secret);
   if (!payload || !shouldRefresh(payload)) return null;
   const refreshed = await signSession(
     { sub: payload.sub, email: payload.email, name: payload.name },
     secret,
   );
-  return cookieHeader(SESSION_COOKIE, refreshed, SESSION_TTL_SECONDS);
+  return cookieHeader(cookieName(SESSION_COOKIE), refreshed, SESSION_TTL_SECONDS);
 }

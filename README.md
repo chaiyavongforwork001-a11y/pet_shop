@@ -47,10 +47,12 @@ node scripts/db-migrate.mjs
 # เพิ่ม --fresh เพื่อลบไฟล์เดิมแล้วเริ่มใหม่ หรือ --status เพื่อดูสถานะ
 # ไฟล์รูปสินค้า/สลิป: บน Netlify ใช้ Netlify Blobs อัตโนมัติ ในเครื่องเก็บที่ .data/blobs
 # (ตั้ง PAWPAL_BLOBS_DIR เมื่อรัน production build ในเครื่อง)
-npx next dev -p 3000
+npx next dev -p 3000 -H 127.0.0.1
 ```
 
 เปิด URL ที่โปรแกรมแสดง เมื่อ `PAWPAL_DEV_AUTH=1` ปุ่ม “ลงชื่อเข้าใช้ด้วย Google” จะพาไปที่ `/auth/dev` ซึ่งเซ็นเซสชันในเครื่องให้ทันทีโดยไม่ต้องติดต่อ Google เส้นทางนี้ตอบ 404 เสมอเมื่อ `NODE_ENV=production` เมื่อไม่ได้ตั้ง `PAWPAL_DEV_AUTH=1` หรือเมื่อมีตัวแปรสภาพแวดล้อม `NETLIFY*` อยู่ จึงเข้าถึงไม่ได้บนเว็บไซต์ที่เผยแพร่แล้ว `ADMIN_EMAIL=dev@pawpal.test` ใน `.env` มีไว้ทดสอบในเครื่องเท่านั้นและไม่ถูก commit
+
+`-H 127.0.0.1` มีเหตุผลด้านความปลอดภัย: `/auth/dev` ออกเซสชันด้วยอีเมลที่ผู้เรียกกำหนดเอง จึงรับเฉพาะคำขอที่มาถึง `127.0.0.1`/`localhost` เท่านั้น และต้องเป็นการเปิดหน้าเว็บของผู้ใช้เอง ไม่ใช่รูปหรือ subresource ที่หน้าเว็บอื่นสั่งโหลด ถ้าไม่ผูกกับ loopback `next dev` จะเปิดทุก interface และคนที่ใช้ Wi-Fi เดียวกันจะเรียกเส้นทางนี้ผ่านหมายเลข LAN ได้
 
 ## ตรวจสอบ
 
@@ -61,8 +63,10 @@ node scripts/verify-d1-shim.mjs
 node scripts/verify-blob-store.mjs
 
 # สคริปต์ด้านล่างยิงคำขอจริงใส่เซิร์ฟเวอร์ในเครื่องที่ตั้ง PAWPAL_DEV_AUTH=1 ไว้
-# เช่น npx next dev -p 3214 แล้ว export TEST_BASE_URL=http://127.0.0.1:3214
-node scripts/verify-auth.mjs            # ตัวตน: header ปลอม คุกกี้ถูกแก้ สิทธิ์แอดมิน ข้อมูลข้ามบัญชี
+# เช่น npx next dev -p 3214 -H 127.0.0.1 แล้ว export TEST_BASE_URL=http://127.0.0.1:3214
+# verify-auth.mjs ต้องได้ SESSION_SECRET ตัวเดียวกับเซิร์ฟเวอร์ ไม่เช่นนั้นจะข้ามการตรวจ
+# บางข้อแล้วจบด้วย exit code ไม่เท่ากับ 0 เพื่อไม่ให้อ่านผลผิดว่าผ่านครบ
+SESSION_SECRET=<ค่าเดียวกับเซิร์ฟเวอร์> node scripts/verify-auth.mjs   # ตัวตน: header ปลอม คุกกี้ถูกแก้ สิทธิ์แอดมิน ข้อมูลข้ามบัญชี
 node scripts/verify-shop.mjs
 node scripts/verify-gallery-reviews.mjs
 node scripts/verify-slip-upload.mjs
