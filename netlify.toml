@@ -18,7 +18,10 @@
 [build]
   # npm ci runs first, from package-lock.json, because the lockfile is committed.
   command = "npm run build"
-  publish = ".next"
+  # Deliberately no `publish`. Netlify's Next.js Runtime decides the publish
+  # directory itself; setting it to ".next" made Netlify serve that folder as
+  # plain static files, so the first deploy shipped zero functions and every
+  # API, auth and admin route 404'd.
 
 [build.environment]
   # Pinned to package.json's `engines.node` floor (">=22.13.0"). These two are
