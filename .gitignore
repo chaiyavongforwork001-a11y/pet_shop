@@ -50,3 +50,6 @@ next-env.d.ts
 
 # promo videos (large binaries, kept locally)
 promo/
+
+# local libSQL database file (dev)
+/.data/

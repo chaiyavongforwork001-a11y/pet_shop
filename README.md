@@ -37,8 +37,10 @@
 npm run install:ci
 # คัดลอก .env.example เป็น .env แล้วกำหนด ADMIN_EMAIL สำหรับสภาพแวดล้อมนี้
 npm run build
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_young_hammerhead.sql
-# ใช้ migration ที่เหลือใน drizzle/ ตามลำดับครั้งเดียวเท่านั้น
+node scripts/db-migrate.mjs
+# ใช้ migration ทั้งหมดใน drizzle/ ตามลำดับครั้งเดียวเท่านั้น ลงฐานข้อมูล libSQL
+# ค่าเริ่มต้นคือไฟล์ local file:.data/local.db; ตั้ง TURSO_DATABASE_URL (และ TURSO_AUTH_TOKEN) เพื่อชี้ไปฐานข้อมูล hosted
+# เพิ่ม --fresh เพื่อลบไฟล์เดิมแล้วเริ่มใหม่ หรือ --status เพื่อดูสถานะ
 npm run dev
 ```
 
@@ -51,6 +53,7 @@ node node_modules/typescript/bin/tsc --noEmit
 node scripts/verify-shop.mjs
 node scripts/verify-gallery-reviews.mjs
 node scripts/verify-migrations.mjs
+node scripts/verify-d1-shim.mjs
 npm run build
 ```
 

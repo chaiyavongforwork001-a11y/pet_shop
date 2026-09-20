@@ -8,10 +8,13 @@ for (const file of readdirSync("drizzle")
   .filter((f) => f.endsWith(".sql"))
   .sort()) {
   const sql = readFileSync(`drizzle/${file}`, "utf8");
-  assert.ok(!sql.includes("\r"), `${file} must use LF for D1 trigger parsing`);
+  assert.ok(
+    !sql.includes("\r"),
+    `${file} must use LF so the migration runner splits triggers correctly`,
+  );
   assert.ok(
     !sql.includes("SELECT CASE"),
-    `${file} must parenthesize trigger CASE expressions for the D1 SQL splitter`,
+    `${file} must parenthesize trigger CASE expressions for SQL statement splitters`,
   );
   db.exec(sql);
 }
