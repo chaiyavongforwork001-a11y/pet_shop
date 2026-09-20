@@ -1,4 +1,4 @@
-import { env } from "./runtime-env";
+import { env, database as openDatabase } from "./runtime";
 import { getChatGPTUser } from "../app/chatgpt-auth";
 import { defaultSettings, seedProducts, type ShopSettings } from "./catalog";
 export class HttpError extends Error {
@@ -10,8 +10,9 @@ export class HttpError extends Error {
   }
 }
 export function database() {
-  if (!env.DB) throw new HttpError(503, "ระบบข้อมูลยังไม่พร้อม กรุณาลองใหม่");
-  return env.DB;
+  const db = openDatabase();
+  if (!db) throw new HttpError(503, "ระบบข้อมูลยังไม่พร้อม กรุณาลองใหม่");
+  return db;
 }
 export function bucket() {
   if (!env.BUCKET) throw new HttpError(503, "ระบบไฟล์ยังไม่พร้อม กรุณาลองใหม่");
