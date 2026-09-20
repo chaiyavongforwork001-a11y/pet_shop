@@ -1,6 +1,6 @@
 # PAWPAL
 
-ร้านสัตว์เลี้ยงภาษาไทย Responsive สร้างด้วย React, TypeScript และ Vinext บน Cloudflare Workers ใช้ D1 เก็บข้อมูล และ R2 เก็บรูปสินค้า/สลิป
+ร้านสัตว์เลี้ยงภาษาไทย Responsive สร้างด้วย React, TypeScript และ Vinext บน Cloudflare Workers ใช้ libSQL (Turso) เก็บข้อมูล และ Netlify Blobs เก็บรูปสินค้า/สลิป
 
 ## สิ่งที่ทำงานแล้ว
 
@@ -13,7 +13,7 @@
 - เลือกจำนวนและซื้อทันทีได้โดยเก็บตะกร้าเดิมไว้ พร้อมสินค้าที่เกี่ยวข้องและแชตถามร้านจากหน้าสินค้า
 - รีวิว 1–5 ดาวจากผู้ซื้อที่คำสั่งซื้อจัดส่งแล้ว แก้ไขรีวิวเดิมได้ และแยกรีวิวโหมดทดลองจากโหมดขายจริง
 - สั่งซื้อ คำนวณค่าจัดส่งจากฝั่งเซิร์ฟเวอร์ ตรวจยอดซ้ำ ป้องกันคำสั่งซื้อซ้ำ และจองสต็อกแบบ atomic
-- แนบสลิป JPG/PNG/WebP ใน R2; ตรวจสิทธิ์เจ้าของคำสั่งซื้อและแอดมินก่อนอ่านไฟล์
+- แนบสลิป JPG/PNG/WebP ไม่เกิน 3 MB เก็บใน Netlify Blobs (ในเครื่องใช้โฟลเดอร์ `.data/blobs`); ตรวจสิทธิ์เจ้าของคำสั่งซื้อและแอดมินก่อนอ่านไฟล์
 - แอดมินเพิ่ม/แก้ไข/ซ่อน/คืนสินค้า อัปโหลดรูป จัดการสต็อก ตรวจสลิป และบันทึกเลขพัสดุ
 - แชตสองทางพร้อมประวัติในฐานข้อมูล อัปเดตทุก 4 วินาที ไม่ใช่บอตตอบอัตโนมัติ
 - ปรับบัญชีธนาคาร ค่าจัดส่ง เงื่อนไขคืนสินค้า และโหมดทดลองจากหลังบ้าน
@@ -41,6 +41,8 @@ node scripts/db-migrate.mjs
 # ใช้ migration ทั้งหมดใน drizzle/ ตามลำดับครั้งเดียวเท่านั้น ลงฐานข้อมูล libSQL
 # ค่าเริ่มต้นคือไฟล์ local file:.data/local.db; ตั้ง TURSO_DATABASE_URL (และ TURSO_AUTH_TOKEN) เพื่อชี้ไปฐานข้อมูล hosted
 # เพิ่ม --fresh เพื่อลบไฟล์เดิมแล้วเริ่มใหม่ หรือ --status เพื่อดูสถานะ
+# ไฟล์รูปสินค้า/สลิป: บน Netlify ใช้ Netlify Blobs อัตโนมัติ ในเครื่องเก็บที่ .data/blobs
+# (ตั้ง PAWPAL_BLOBS_DIR เมื่อรัน production build ในเครื่อง)
 npm run dev
 ```
 
@@ -54,6 +56,8 @@ node scripts/verify-shop.mjs
 node scripts/verify-gallery-reviews.mjs
 node scripts/verify-migrations.mjs
 node scripts/verify-d1-shim.mjs
+node scripts/verify-blob-store.mjs
+# ต้องมีเซิร์ฟเวอร์ทำงานอยู่ก่อน: TEST_BASE_URL=http://127.0.0.1:3000 node scripts/verify-slip-upload.mjs
 npm run build
 ```
 
@@ -68,10 +72,11 @@ Integration test ต้องมี local preview และสิทธิ์แ
 - `app/experience.tsx`, `app/pet-world.tsx`, `app/redesign.css`: ฉากหลัก โมเดล 3D แบบ procedural และดีไซน์ใหม่ ไม่มีโมเดลหรือภาพจากเว็บอ้างอิง
 - `app/admin/`: หลังบ้านและหน้าตรวจสิทธิ์
 - `app/api/[...path]/route.ts`: API และ validation
-- `lib/server.ts`: สิทธิ์ D1/R2 และการตรวจไฟล์
+- `lib/server.ts`: สิทธิ์ฐานข้อมูล/ที่เก็บไฟล์ และการตรวจไฟล์
+- `lib/runtime.ts`, `lib/d1-shim.ts`, `lib/blob-store.ts`: เลือกฐานข้อมูล libSQL และที่เก็บไฟล์ (Netlify Blobs หรือโฟลเดอร์ในเครื่อง)
 - `db/schema.ts`, `drizzle/`: schema และ migrations (migration แรกมี triggers สำหรับจอง/คืนสต็อก)
 - `public/images/`: ภาพต้นฉบับสร้างสำหรับ PAWPAL แปลง WebP แล้ว
 
-สินค้าและคำสั่งซื้อบันทึกใน D1 ไม่ได้ใช้ localStorage เป็นฐานข้อมูลร้าน ตะกร้า/รายการโปรดเป็นข้อมูลเฉพาะอุปกรณ์เท่านั้น ยังไม่มีระบบอีเมลแจ้งเตือน ขนส่งอัตโนมัติ ภาษีเต็มรูปแบบ หรือ OAuth ลูกค้าภายนอก
+สินค้าและคำสั่งซื้อบันทึกในฐานข้อมูล libSQL ไม่ได้ใช้ localStorage เป็นฐานข้อมูลร้าน ตะกร้า/รายการโปรดเป็นข้อมูลเฉพาะอุปกรณ์เท่านั้น ยังไม่มีระบบอีเมลแจ้งเตือน ขนส่งอัตโนมัติ ภาษีเต็มรูปแบบ หรือ OAuth ลูกค้าภายนอก
 
 แรงบันดาลใจด้านคาแรกเตอร์และ motion: [Spacers](https://spacers.wannathis.one/), [ATMOS](https://atmos.leeroy.ca/), [Gemini](https://exp-gemini.lusion.co/style) ปรับเป็นเมนูช้อปปิ้งปกติที่ใช้บนมือถือได้โดยไม่ต้องผ่านฉากเปิดหรือบังคับทิศทางจอ

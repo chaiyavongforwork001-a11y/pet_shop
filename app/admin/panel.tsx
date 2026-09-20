@@ -592,7 +592,7 @@ function ProductForm({
                   upload(files);
                 }}
               />
-              <small>เลือกได้หลายรูป • JPG, PNG, WebP ไม่เกิน 5 MB/รูป</small>
+              <small>เลือกได้หลายรูป • JPG, PNG, WebP ไม่เกิน 3 MB/รูป</small>
             </label>
             <label>
               หรือเพิ่มด้วยลิงก์ภาพ HTTPS

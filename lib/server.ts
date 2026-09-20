@@ -1,4 +1,8 @@
-import { env, database as openDatabase } from "./runtime";
+import {
+  env,
+  database as openDatabase,
+  blobStore as openBlobStore,
+} from "./runtime";
 import { getChatGPTUser } from "../app/chatgpt-auth";
 import { defaultSettings, seedProducts, type ShopSettings } from "./catalog";
 export class HttpError extends Error {
@@ -15,8 +19,9 @@ export function database() {
   return db;
 }
 export function bucket() {
-  if (!env.BUCKET) throw new HttpError(503, "ระบบไฟล์ยังไม่พร้อม กรุณาลองใหม่");
-  return env.BUCKET;
+  const store = openBlobStore();
+  if (!store) throw new HttpError(503, "ระบบไฟล์ยังไม่พร้อม กรุณาลองใหม่");
+  return store;
 }
 export async function identity() {
   const u = await getChatGPTUser();
@@ -129,13 +134,20 @@ export function productView(p: any) {
   } catch {}
   return { ...p, images };
 }
+// Netlify Functions reject a request body of roughly 4.5 MB or more (the
+// platform sees it base64-encoded). Staying under that ourselves is what turns
+// an opaque platform failure into the app's own Thai-language error: 3 MB of
+// image, plus room for the multipart envelope around it.
+export const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
+export const MAX_IMAGE_REQUEST_BYTES = 4 * 1024 * 1024;
+
 export async function imageFile(req: Request) {
-  if (Number(req.headers.get("content-length") || 0) > 6 * 1024 * 1024)
-    throw new HttpError(413, "รูปต้องมีขนาดไม่เกิน 5 MB");
+  if (Number(req.headers.get("content-length") || 0) > MAX_IMAGE_REQUEST_BYTES)
+    throw new HttpError(413, "รูปต้องมีขนาดไม่เกิน 3 MB");
   const form = await req.formData();
   const file = form.get("file");
-  if (!(file instanceof File) || !file.size || file.size > 5 * 1024 * 1024)
-    throw new HttpError(400, "เลือกรูป JPG, PNG หรือ WebP ไม่เกิน 5 MB");
+  if (!(file instanceof File) || !file.size || file.size > MAX_IMAGE_BYTES)
+    throw new HttpError(400, "เลือกรูป JPG, PNG หรือ WebP ไม่เกิน 3 MB");
   const bytes = await file.arrayBuffer();
   const b = new Uint8Array(bytes);
   let type = "";

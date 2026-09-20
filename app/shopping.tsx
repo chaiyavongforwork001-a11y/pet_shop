@@ -294,8 +294,8 @@ export function Orders({
   }, []);
   async function upload(id: string, file: File | undefined, from?: DOMRect) {
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setError("รูปสลิปต้องมีขนาดไม่เกิน 5 MB");
+    if (file.size > 3 * 1024 * 1024) {
+      setError("รูปสลิปต้องมีขนาดไม่เกิน 3 MB");
       return;
     }
     setBusy(id);
@@ -435,7 +435,7 @@ export function Orders({
                       )
                     }
                   />
-                  <small>JPG, PNG หรือ WebP ไม่เกิน 5 MB</small>
+                  <small>JPG, PNG หรือ WebP ไม่เกิน 3 MB</small>
                 </label>
                 {uploaded === o.id && (
                   <span className="cf-slip-ok" role="status">

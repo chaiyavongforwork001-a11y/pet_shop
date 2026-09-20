@@ -11,14 +11,26 @@
 // The last case deliberately yields `null`: lib/server.ts turns that into the
 // existing 503 rather than serving an empty shop.
 //
-// BUCKET is still undefined; Netlify Blobs is Phase 3.
+// The R2 bucket is replaced the same way (lib/blob-store.ts):
+//
+//   PAWPAL_BLOBS_DIR                -> that directory, in any environment
+//   on Netlify                      -> Netlify Blobs, strongly consistent
+//   neither, outside production     -> .data/blobs
+//   neither, in production          -> no store at all, i.e. the existing 503
 import { createClient, type Client, type Config } from "@libsql/client";
 import { createD1Shim, type D1ShimDatabase } from "./d1-shim";
+import {
+  createLocalBlobStore,
+  createNetlifyBlobStore,
+  onNetlify,
+  DEFAULT_BLOB_STORE_NAME,
+  DEFAULT_LOCAL_BLOB_DIR,
+  type BlobStore,
+} from "./blob-store";
 
 const DEFAULT_LOCAL_DATABASE_URL = "file:.data/local.db";
 
-export const env: { BUCKET?: R2Bucket; ADMIN_EMAIL?: string } = {
-  BUCKET: undefined,
+export const env: { ADMIN_EMAIL?: string } = {
   ADMIN_EMAIL: process.env.ADMIN_EMAIL,
 };
 
@@ -66,4 +78,52 @@ export function database(): D1ShimDatabase | null {
   const opened = libsqlClient();
   shim = opened ? createD1Shim(opened) : null;
   return shim;
+}
+
+export type BlobStoreConfig =
+  | { kind: "netlify"; name: string }
+  | { kind: "local"; directory: string };
+
+/** Resolved lazily, for the same reason the database config is. */
+export function blobStoreConfig(): BlobStoreConfig | null {
+  const directory = (process.env.PAWPAL_BLOBS_DIR || "").trim();
+  if (directory) return { kind: "local", directory };
+  if (onNetlify())
+    return {
+      kind: "netlify",
+      name:
+        (process.env.NETLIFY_BLOBS_STORE || "").trim() ||
+        DEFAULT_BLOB_STORE_NAME,
+    };
+  if (process.env.NODE_ENV === "production") return null;
+  return { kind: "local", directory: DEFAULT_LOCAL_BLOB_DIR };
+}
+
+/**
+ * The R2-shaped store, or null when none can be opened.
+ *
+ * Not memoised, unlike the database client: building a store opens no
+ * connection, and on Netlify the blobs credentials can be injected per
+ * invocation, so a store cached at module scope could outlive its own
+ * configuration.
+ */
+export function blobStore(): BlobStore | null {
+  const config = blobStoreConfig();
+  if (!config) {
+    console.error(
+      "PAWPAL has no file store: deploy on Netlify (Blobs) or set PAWPAL_BLOBS_DIR for this environment.",
+    );
+    return null;
+  }
+  try {
+    return config.kind === "netlify"
+      ? createNetlifyBlobStore(config.name)
+      : createLocalBlobStore(config.directory);
+  } catch (error) {
+    console.error(
+      "PAWPAL could not open the file store",
+      error instanceof Error ? error.message : "Unknown error",
+    );
+    return null;
+  }
 }
