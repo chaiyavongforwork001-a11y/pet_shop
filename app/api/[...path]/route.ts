@@ -16,6 +16,7 @@ import {
   HttpError,
 } from "../../../lib/server";
 import { categories } from "../../../lib/catalog";
+import { sessionRefreshCookie } from "../../session";
 export const dynamic = "force-dynamic";
 function validProductImage(s: string) {
   if (
@@ -647,7 +648,26 @@ async function handle(req: Request) {
     return json({ error: "ระบบไม่พร้อมชั่วคราว กรุณาลองใหม่อีกครั้ง" }, 503);
   }
 }
-export const GET = handle;
-export const POST = handle;
-export const PATCH = handle;
-export const DELETE = handle;
+/**
+ * Every API response also carries a re-issued session cookie once the current
+ * one is past half its life, so an active shopper never expires mid-checkout.
+ * A failure here is not a failure of the request: the worst case is a session
+ * that expires on its original schedule.
+ */
+async function withFreshSession(req: Request) {
+  const response = await handle(req);
+  try {
+    const refreshed = await sessionRefreshCookie();
+    if (refreshed) response.headers.append("Set-Cookie", refreshed);
+  } catch (error) {
+    console.error(
+      "PAWPAL could not refresh the session cookie",
+      error instanceof Error ? error.message : "Unknown error",
+    );
+  }
+  return response;
+}
+export const GET = withFreshSession;
+export const POST = withFreshSession;
+export const PATCH = withFreshSession;
+export const DELETE = withFreshSession;

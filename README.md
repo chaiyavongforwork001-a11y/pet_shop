@@ -14,6 +14,8 @@
 - รีวิว 1–5 ดาวจากผู้ซื้อที่คำสั่งซื้อจัดส่งแล้ว แก้ไขรีวิวเดิมได้ และแยกรีวิวโหมดทดลองจากโหมดขายจริง
 - สั่งซื้อ คำนวณค่าจัดส่งจากฝั่งเซิร์ฟเวอร์ ตรวจยอดซ้ำ ป้องกันคำสั่งซื้อซ้ำ และจองสต็อกแบบ atomic
 - แนบสลิป JPG/PNG/WebP ไม่เกิน 3 MB เก็บใน Netlify Blobs (ในเครื่องใช้โฟลเดอร์ `.data/blobs`); ตรวจสิทธิ์เจ้าของคำสั่งซื้อและแอดมินก่อนอ่านไฟล์
+- ลงชื่อเข้าใช้ด้วยบัญชี Google ทั้งลูกค้าและเจ้าของร้าน เซสชันเก็บในคุกกี้ที่เซิร์ฟเวอร์เซ็น HMAC-SHA256 (httpOnly, SameSite=Lax) ต้องลงชื่อเข้าใช้ก่อนสั่งซื้อ
+- สิทธิ์แอดมินมาจาก allowlist `ADMIN_EMAIL` เทียบกับอีเมล Google ที่ยืนยันแล้ว ถ้าไม่ได้ตั้งค่าไว้จะไม่มีใครเป็นแอดมิน
 - แอดมินเพิ่ม/แก้ไข/ซ่อน/คืนสินค้า อัปโหลดรูป จัดการสต็อก ตรวจสลิป และบันทึกเลขพัสดุ
 - แชตสองทางพร้อมประวัติในฐานข้อมูล อัปเดตทุก 4 วินาที ไม่ใช่บอตตอบอัตโนมัติ
 - ปรับบัญชีธนาคาร ค่าจัดส่ง เงื่อนไขคืนสินค้า และโหมดทดลองจากหลังบ้าน
@@ -24,10 +26,11 @@
 ขณะส่งมอบเป็นโหมดทดลอง ใช้สินค้าและภาพแพ็กเกจสมมติ ไม่มีเลขบัญชีธนาคาร และยังไม่ได้ตั้งอีเมลแอดมินสำหรับระบบออนไลน์ตามคำขอผู้ใช้
 
 1. ตั้ง `ADMIN_EMAIL` ใน hosted environment ให้ตรงบัญชีที่ได้รับอนุญาต แล้วเผยแพร่การตั้งค่าใหม่ ผู้ที่ไม่มีอีเมลใน allowlist จะเข้า API แอดมินไม่ได้
-2. ลงชื่อเข้าใช้ที่ `/admin` ผ่าน ChatGPT; การลงชื่อเข้าใช้ในรุ่นนี้ใช้ระบบ Sites ไม่ใช่บัญชีลูกค้าด้วยรหัสผ่านหรือ LINE
-3. เปลี่ยนสินค้าตัวอย่างให้เป็นสินค้าจริง รวมภาพ ราคา สต็อก ข้อมูลฉลาก และเงื่อนไขร้าน
-4. ตั้งบัญชีรับเงินที่ถูกต้อง ก่อนปิดโหมดทดลอง ร้านต้องตรวจเงินจริงในบัญชีก่อนยืนยันสลิป ระบบไม่มีบริการตรวจสลิปธนาคารอัตโนมัติ
-5. การยกเลิกคืนเฉพาะสต็อก หากรับเงินแล้วร้านต้องดำเนินการคืนเงินแยกต่างหาก
+2. สร้าง OAuth client (Web application) ใน Google Cloud Console ใส่ `<เว็บไซต์>/auth/google/callback` เป็น authorised redirect URI แล้วตั้ง `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` และ `SESSION_SECRET` (สุ่มยาว ๆ) ใน hosted environment ถ้าไม่มี `SESSION_SECRET` ระบบจะไม่ยอมให้ใครลงชื่อเข้าใช้เลย
+3. ลงชื่อเข้าใช้ที่ `/admin` ด้วยบัญชี Google ที่อยู่ใน `ADMIN_EMAIL`; รุ่นนี้ไม่มีรหัสผ่านของร้านเองและไม่มีการลงชื่อเข้าใช้ด้วย LINE
+4. เปลี่ยนสินค้าตัวอย่างให้เป็นสินค้าจริง รวมภาพ ราคา สต็อก ข้อมูลฉลาก และเงื่อนไขร้าน
+5. ตั้งบัญชีรับเงินที่ถูกต้อง ก่อนปิดโหมดทดลอง ร้านต้องตรวจเงินจริงในบัญชีก่อนยืนยันสลิป ระบบไม่มีบริการตรวจสลิปธนาคารอัตโนมัติ
+6. การยกเลิกคืนเฉพาะสต็อก หากรับเงินแล้วร้านต้องดำเนินการคืนเงินแยกต่างหาก
 
 ## รันในเครื่อง
 
@@ -35,7 +38,8 @@
 
 ```sh
 npm run install:ci
-# คัดลอก .env.example เป็น .env แล้วกำหนด ADMIN_EMAIL สำหรับสภาพแวดล้อมนี้
+# คัดลอก .env.example เป็น .env แล้วกำหนด ADMIN_EMAIL, SESSION_SECRET
+# และ PAWPAL_DEV_AUTH=1 สำหรับเครื่องนี้ (ลงชื่อเข้าใช้ในเครื่องโดยไม่ต้องใช้ Google)
 npm run build
 node scripts/db-migrate.mjs
 # ใช้ migration ทั้งหมดใน drizzle/ ตามลำดับครั้งเดียวเท่านั้น ลงฐานข้อมูล libSQL
@@ -43,25 +47,35 @@ node scripts/db-migrate.mjs
 # เพิ่ม --fresh เพื่อลบไฟล์เดิมแล้วเริ่มใหม่ หรือ --status เพื่อดูสถานะ
 # ไฟล์รูปสินค้า/สลิป: บน Netlify ใช้ Netlify Blobs อัตโนมัติ ในเครื่องเก็บที่ .data/blobs
 # (ตั้ง PAWPAL_BLOBS_DIR เมื่อรัน production build ในเครื่อง)
-npm run dev
+npx next dev -p 3000
 ```
 
-เปิด URL ที่โปรแกรมแสดง (เริ่มต้น http://localhost:5173) Preview จำลอง ChatGPT sign-in เป็น `seedy@sites.test` เฉพาะเครื่อง local; production ไม่มี mock นี้ การตั้ง `ADMIN_EMAIL=seedy@sites.test` ใน `.env` เป็นเพียงสำหรับทดสอบ local และไม่ถูก commit/publish
+เปิด URL ที่โปรแกรมแสดง เมื่อ `PAWPAL_DEV_AUTH=1` ปุ่ม “ลงชื่อเข้าใช้ด้วย Google” จะพาไปที่ `/auth/dev` ซึ่งเซ็นเซสชันในเครื่องให้ทันทีโดยไม่ต้องติดต่อ Google เส้นทางนี้ตอบ 404 เสมอเมื่อ `NODE_ENV=production` เมื่อไม่ได้ตั้ง `PAWPAL_DEV_AUTH=1` หรือเมื่อมีตัวแปรสภาพแวดล้อม `NETLIFY*` อยู่ จึงเข้าถึงไม่ได้บนเว็บไซต์ที่เผยแพร่แล้ว `ADMIN_EMAIL=dev@pawpal.test` ใน `.env` มีไว้ทดสอบในเครื่องเท่านั้นและไม่ถูก commit
 
 ## ตรวจสอบ
 
 ```sh
 node node_modules/typescript/bin/tsc --noEmit
-node scripts/verify-shop.mjs
-node scripts/verify-gallery-reviews.mjs
 node scripts/verify-migrations.mjs
 node scripts/verify-d1-shim.mjs
 node scripts/verify-blob-store.mjs
-# ต้องมีเซิร์ฟเวอร์ทำงานอยู่ก่อน: TEST_BASE_URL=http://127.0.0.1:3000 node scripts/verify-slip-upload.mjs
-npm run build
+
+# สคริปต์ด้านล่างยิงคำขอจริงใส่เซิร์ฟเวอร์ในเครื่องที่ตั้ง PAWPAL_DEV_AUTH=1 ไว้
+# เช่น npx next dev -p 3214 แล้ว export TEST_BASE_URL=http://127.0.0.1:3214
+node scripts/verify-auth.mjs            # ตัวตน: header ปลอม คุกกี้ถูกแก้ สิทธิ์แอดมิน ข้อมูลข้ามบัญชี
+node scripts/verify-shop.mjs
+node scripts/verify-gallery-reviews.mjs
+node scripts/verify-slip-upload.mjs
+
+# กรณีที่ต้องตั้งค่าเซิร์ฟเวอร์ต่างออกไป (ดูหัวไฟล์ประกอบ)
+node scripts/verify-auth-closed.mjs no-admin     # เซิร์ฟเวอร์ที่ไม่ได้ตั้ง ADMIN_EMAIL
+node scripts/verify-auth-closed.mjs production   # next start ของ production build
+node scripts/verify-auth-closed.mjs no-secret    # production build ที่ไม่มี SESSION_SECRET
+node scripts/verify-auth-closed.mjs google       # production build ที่ตั้ง GOOGLE_CLIENT_ID ไว้
+npx next build
 ```
 
-Integration test ต้องมี local preview และสิทธิ์แอดมินของบัญชี mock จะสร้างข้อมูลทดสอบเฉพาะฐานข้อมูล local และซ่อนสินค้าทดสอบเมื่อเสร็จ ห้ามชี้ไป production
+Integration test ต้องมีเซิร์ฟเวอร์ในเครื่อง และบัญชีจาก `/auth/dev` ต้องอยู่ใน `ADMIN_EMAIL` จะสร้างข้อมูลทดสอบเฉพาะฐานข้อมูล local และซ่อนสินค้าทดสอบเมื่อเสร็จ ห้ามชี้ไป production
 
 ทดสอบสิทธิ์ การกันสต็อก สลิปปลอม retry/idempotency สลิปเปลี่ยนระหว่างตรวจ การคืนสต็อก และแชต ข้อมูลรายการสินค้ารองรับราคาทศนิยม 2 ตำแหน่ง
 
@@ -73,10 +87,12 @@ Integration test ต้องมี local preview และสิทธิ์แ
 - `app/admin/`: หลังบ้านและหน้าตรวจสิทธิ์
 - `app/api/[...path]/route.ts`: API และ validation
 - `lib/server.ts`: สิทธิ์ฐานข้อมูล/ที่เก็บไฟล์ และการตรวจไฟล์
+- `lib/session.ts`, `lib/auth.ts`, `app/session.ts`: คุกกี้เซสชันที่เซ็นด้วย HMAC-SHA256, ค่าคอนฟิก Google และตัวตนที่แอปมองเห็น
+- `app/signin/`, `app/signout/`, `app/auth/google/callback/`, `app/auth/dev/`: เริ่ม/จบการลงชื่อเข้าใช้ Google (authorization code + PKCE) และผู้ให้บริการสำหรับ development เท่านั้น
 - `lib/runtime.ts`, `lib/d1-shim.ts`, `lib/blob-store.ts`: เลือกฐานข้อมูล libSQL และที่เก็บไฟล์ (Netlify Blobs หรือโฟลเดอร์ในเครื่อง)
 - `db/schema.ts`, `drizzle/`: schema และ migrations (migration แรกมี triggers สำหรับจอง/คืนสต็อก)
 - `public/images/`: ภาพต้นฉบับสร้างสำหรับ PAWPAL แปลง WebP แล้ว
 
-สินค้าและคำสั่งซื้อบันทึกในฐานข้อมูล libSQL ไม่ได้ใช้ localStorage เป็นฐานข้อมูลร้าน ตะกร้า/รายการโปรดเป็นข้อมูลเฉพาะอุปกรณ์เท่านั้น ยังไม่มีระบบอีเมลแจ้งเตือน ขนส่งอัตโนมัติ ภาษีเต็มรูปแบบ หรือ OAuth ลูกค้าภายนอก
+สินค้าและคำสั่งซื้อบันทึกในฐานข้อมูล libSQL ไม่ได้ใช้ localStorage เป็นฐานข้อมูลร้าน ตะกร้า/รายการโปรดเป็นข้อมูลเฉพาะอุปกรณ์เท่านั้น ยังไม่มีระบบอีเมลแจ้งเตือน ขนส่งอัตโนมัติ หรือภาษีเต็มรูปแบบ คำสั่งซื้อ/แชต/รีวิวเดิมในฐานข้อมูลตัวอย่างผูกกับรหัสผู้ใช้ของระบบเดิม จึงไม่ตรงกับบัญชี Google ใหม่และจะไม่ปรากฏให้ผู้ใช้คนใดเห็น
 
 แรงบันดาลใจด้านคาแรกเตอร์และ motion: [Spacers](https://spacers.wannathis.one/), [ATMOS](https://atmos.leeroy.ca/), [Gemini](https://exp-gemini.lusion.co/style) ปรับเป็นเมนูช้อปปิ้งปกติที่ใช้บนมือถือได้โดยไม่ต้องผ่านฉากเปิดหรือบังคับทิศทางจอ

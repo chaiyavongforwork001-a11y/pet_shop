@@ -140,6 +140,9 @@ export default function Admin({ name }: { name: string }) {
           <ArrowUpRight size={18} /> ไปหน้าร้าน
         </a>
         <small className="admin-user">{name}</small>
+        <a className="back-shop" href="/signout?return_to=%2Fadmin">
+          ออกจากระบบ
+        </a>
       </aside>
       <main className="admin-main">
         <header className="admin-top">

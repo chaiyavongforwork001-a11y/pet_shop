@@ -122,7 +122,7 @@ export function Checkout({
               <a
                 className="primary-button"
                 href={
-                  "/signin-with-chatgpt?return_to=" +
+                  "/signin?return_to=" +
                   encodeURIComponent(
                     typeof window !== "undefined"
                       ? location.pathname + location.search
@@ -131,7 +131,7 @@ export function Checkout({
                 }
                 target="_top"
               >
-                ลงชื่อเข้าใช้ด้วย ChatGPT
+                ลงชื่อเข้าใช้ด้วย Google
               </a>
             </>
           )}
@@ -228,7 +228,7 @@ export function Checkout({
           <div className="error" role="alert">
             {error}
             {error.includes("ลงชื่อ") && (
-              <a href="/signin-with-chatgpt?return_to=/" target="_top">
+              <a href="/signin?return_to=/" target="_top">
                 ลงชื่อเข้าใช้
               </a>
             )}
@@ -341,7 +341,7 @@ export function Orders({
         <div className="error">
           {error}
           {error.includes("ลงชื่อ") && (
-            <a href="/signin-with-chatgpt?return_to=/" target="_top">
+            <a href="/signin?return_to=/" target="_top">
               ลงชื่อเข้าใช้เพื่อดูคำสั่งซื้อ
             </a>
           )}
@@ -751,7 +751,7 @@ export function Chat({
                     <small>เก็บบทสนทนาไว้ กลับมาคุยต่อได้</small>
                   </p>
                   <a
-                    href="/signin-with-chatgpt?return_to=/"
+                    href="/signin?return_to=/"
                     target="_top"
                     onClick={rememberDraft}
                   >
@@ -764,7 +764,7 @@ export function Chat({
                   {error}
                   {error.includes("ลงชื่อ") && (
                     <a
-                      href="/signin-with-chatgpt?return_to=/"
+                      href="/signin?return_to=/"
                       target="_top"
                       onClick={rememberDraft}
                     >

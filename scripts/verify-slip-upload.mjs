@@ -3,31 +3,45 @@
 // an admin can, and an oversized upload gets the app's own Thai error rather
 // than an opaque platform failure.
 //
-// Identity comes from the `oai-authenticated-user-*` request headers that
-// app/chatgpt-auth.ts already reads; no authentication code is involved here.
+// Identity is a real signed session cookie, minted by the development-only
+// provider at /auth/dev (scripts/dev-session.mjs). The forged
+// `oai-authenticated-user-*` headers this script used to send are gone, along
+// with the code that trusted them.
 //
-//   TEST_BASE_URL=http://127.0.0.1:3213 ADMIN_EMAIL=seedy@sites.test \
+//   TEST_BASE_URL=http://127.0.0.1:3213 ADMIN_EMAIL=dev@pawpal.test \
 //     node scripts/verify-slip-upload.mjs
 import assert from "node:assert/strict";
+import { devSession } from "./dev-session.mjs";
 
 const base = process.env.TEST_BASE_URL || "http://127.0.0.1:3213";
 if (!["localhost", "127.0.0.1"].includes(new URL(base).hostname))
   throw Error("Local test only");
-const adminEmail = (process.env.ADMIN_EMAIL || "seedy@sites.test")
+const adminEmail = (process.env.ADMIN_EMAIL || "dev@pawpal.test")
   .split(",")[0]
   .trim();
 
-const owner = { id: `user-owner-${crypto.randomUUID()}`, email: "owner@pawpal.test" };
-const other = { id: `user-other-${crypto.randomUUID()}`, email: "other@pawpal.test" };
-const admin = { id: `user-admin-${crypto.randomUUID()}`, email: adminEmail };
+async function signIn(sub, email, name) {
+  return { cookie: await devSession(base, { sub, email, name }) };
+}
+
+const owner = await signIn(
+  `user-owner-${crypto.randomUUID()}`,
+  "owner@pawpal.test",
+  "Slip Owner",
+);
+const other = await signIn(
+  `user-other-${crypto.randomUUID()}`,
+  "other@pawpal.test",
+  "Someone Else",
+);
+const admin = await signIn(
+  `user-admin-${crypto.randomUUID()}`,
+  adminEmail,
+  "Shop Admin",
+);
 
 function headers(user) {
-  return user
-    ? {
-        "oai-authenticated-user-id": user.id,
-        "oai-authenticated-user-email": user.email,
-      }
-    : {};
+  return user ? { cookie: user.cookie } : {};
 }
 
 async function api(path, { user, method = "GET", data, body, type } = {}) {

@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import { devSession } from "./dev-session.mjs";
 const base = process.env.TEST_BASE_URL || "http://localhost:5173";
 if (!["localhost", "127.0.0.1"].includes(new URL(base).hostname))
   throw Error("Local test only");
 let checks = 0;
-const login = await fetch(base + "/signin-with-chatgpt?return_to=/", {
-  redirect: "manual",
-});
-const cookie = login.headers.get("set-cookie")?.split(";")[0];
+// One account plays both parts, as before: it shops, and its address is in
+// ADMIN_EMAIL so it also administers. The cookie is a real signed session.
+const shopper = {
+  sub: "verify-shop-user",
+  email: (process.env.ADMIN_EMAIL || "dev@pawpal.test").split(",")[0].trim(),
+  name: "Seedy",
+};
+const cookie = await devSession(base, shopper);
 async function request(
   path,
   { method = "GET", data, auth = true, origin, form } = {},

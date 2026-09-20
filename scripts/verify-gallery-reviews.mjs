@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
-const base = "http://localhost:5173";
-const login = await fetch(base + "/signin-with-chatgpt?return_to=/", {
-  redirect: "manual",
+import { devSession } from "./dev-session.mjs";
+const base = process.env.TEST_BASE_URL || "http://localhost:5173";
+if (!["localhost", "127.0.0.1"].includes(new URL(base).hostname))
+  throw Error("Local test only");
+// The buyer is also the admin here: the script creates a product, buys it and
+// ships it to itself to reach the verified-purchase review path.
+const cookie = await devSession(base, {
+  sub: "verify-gallery-user",
+  email: (process.env.ADMIN_EMAIL || "dev@pawpal.test").split(",")[0].trim(),
+  name: "QA Pet Parent",
 });
-const cookie = login.headers.get("set-cookie")?.split(";")[0];
 let checks = 0;
 async function request(path, method = "GET", data, auth = true) {
   const r = await fetch(base + path, {

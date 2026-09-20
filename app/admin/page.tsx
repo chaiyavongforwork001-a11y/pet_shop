@@ -1,10 +1,10 @@
-import { getChatGPTUser, chatGPTSignInPath } from "../chatgpt-auth";
+import { getUser, signInPath, signOutPath } from "../session";
 import { isAdmin } from "../../lib/server";
 import Admin from "./panel";
 import { Brand } from "../ui";
 export const dynamic = "force-dynamic";
 export default async function AdminPage() {
-  const u = await getChatGPTUser();
+  const u = await getUser();
   if (!u || !(await isAdmin()))
     return (
       <main className="admin-access">
@@ -16,13 +16,17 @@ export default async function AdminPage() {
               ? "บัญชีนี้ยังไม่ได้รับสิทธิ์แอดมิน เจ้าของร้านต้องกำหนดอีเมลแอดมินก่อนเริ่มใช้งาน"
               : "ลงชื่อเข้าใช้ด้วยบัญชีแอดมินเพื่อจัดการสินค้า คำสั่งซื้อ และแชต"}
           </p>
-          {!u && (
+          {u ? (
+            <a className="primary-button" href={signOutPath("/admin")}>
+              ออกจากระบบแล้วลองบัญชี Google อื่น
+            </a>
+          ) : (
             <a
               className="primary-button"
-              href={chatGPTSignInPath("/admin")}
+              href={signInPath("/admin")}
               target="_top"
             >
-              ลงชื่อเข้าใช้ด้วย ChatGPT
+              ลงชื่อเข้าใช้ด้วย Google
             </a>
           )}
           <a className="text-button" href="/">

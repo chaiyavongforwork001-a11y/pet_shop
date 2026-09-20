@@ -3,7 +3,7 @@ import {
   database as openDatabase,
   blobStore as openBlobStore,
 } from "./runtime";
-import { getChatGPTUser } from "../app/chatgpt-auth";
+import { getUser } from "../app/session";
 import { defaultSettings, seedProducts, type ShopSettings } from "./catalog";
 export class HttpError extends Error {
   constructor(
@@ -24,12 +24,12 @@ export function bucket() {
   return store;
 }
 export async function identity() {
-  const u = await getChatGPTUser();
+  const u = await getUser();
   if (!u) throw new HttpError(401, "กรุณาลงชื่อเข้าใช้ก่อนดำเนินการ");
   return u;
 }
 export async function isAdmin() {
-  const u = await getChatGPTUser();
+  const u = await getUser();
   if (!u) return false;
   const configured = ((env as any).ADMIN_EMAIL || "")
     .split(",")
