@@ -1,0 +1,26 @@
+# Netlify build settings for PAWPAL.
+#
+# Netlify detects Next.js by itself and installs its own Next.js Runtime (the
+# OpenNext adapter), which turns the `.next` output into the functions and
+# static assets the site is served from. There is deliberately no custom
+# server and no hand-written function here: app/api/[...path]/route.ts, the
+# auth routes under app/signin, app/signout and app/auth/, and every page are
+# ordinary Next.js server routes, and the adapter is what runs them.
+#
+# Nothing secret belongs in this file — it is committed to the repository.
+# SESSION_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, TURSO_DATABASE_URL,
+# TURSO_AUTH_TOKEN and ADMIN_EMAIL are set by the shop owner in the Netlify UI
+# (Site configuration -> Environment variables). See docs/deploy-netlify.md.
+#
+# Netlify Blobs needs no configuration: lib/blob-store.ts detects Netlify and
+# opens the "pawpal-media" store (NETLIFY_BLOBS_STORE overrides the name).
+
+[build]
+  # npm ci runs first, from package-lock.json, because the lockfile is committed.
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  # Pinned to package.json's `engines.node` floor (">=22.13.0"). These two are
+  # the same decision written twice: change them together.
+  NODE_VERSION = "22.13.0"

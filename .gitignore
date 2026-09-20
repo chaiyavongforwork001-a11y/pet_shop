@@ -36,9 +36,14 @@ yarn-error.log*
 # vercel
 .vercel
 
+# netlify (local CLI state)
+/.netlify/
+
 # typescript
 next-env.d.ts
 *.tsbuildinfo
+# Left over from the Cloudflare/vinext toolchain this project no longer uses.
+# Nothing regenerates these; the entries stay so old checkouts stay quiet.
 /dist/
 /.wrangler/
 # Checkout-local execution profile and tool state; never publish them.
