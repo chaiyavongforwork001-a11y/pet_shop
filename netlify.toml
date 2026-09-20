@@ -27,3 +27,13 @@
   # Pinned to package.json's `engines.node` floor (">=22.13.0"). These two are
   # the same decision written twice: change them together.
   NODE_VERSION = "22.13.0"
+
+# Declared explicitly on purpose. Netlify's docs say the Next.js Runtime is
+# installed automatically, and for sites created in the UI it is — but this
+# site is built from an API-uploaded source zip and two deploys in a row came
+# back with plugin_state "none" and zero functions, which meant every server
+# route 404'd. Declaring the package forces the runtime to install at build
+# time. The version is deliberately unpinned: Netlify updates the adapter for
+# each Next.js release and recommends against pinning it.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
